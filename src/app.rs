@@ -7,8 +7,8 @@ use egui::{
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
 pub struct TemplateApp {
-    strokes: Vec<Vec<Pos2>>,
-    current_stroke: Vec<Pos2>,
+    strokes: Vec<Vec<(Stroke, Pos2)>>,
+    current_stroke: Vec<(Stroke, Pos2)>,
     stroke_type: Color,
     // #[serde(skip)] // This how you opt-out of serialization of a field
 }
@@ -25,7 +25,7 @@ impl Default for TemplateApp {
 
 impl TemplateApp {
     /// Called once before the first frame.
-    pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
+    pub fn new(_cc: &eframe::CreationContext<'_>) -> Self {
         // This is also where you can customize the look and feel of egui using
         // `cc.egui_ctx.set_visuals` and `cc.egui_ctx.set_fonts`.
 
@@ -105,7 +105,7 @@ impl eframe::App for TemplateApp {
 
             if response.dragged() {
                 if let Some(pos) = response.interact_pointer_pos() {
-                    self.current_stroke.push(pos);
+                    self.current_stroke.push((self.stroke_type.color(), pos));
                 }
             }
 
@@ -117,12 +117,12 @@ impl eframe::App for TemplateApp {
             // Maybe create a stroke struct that is an array of two Pos2 structs to prevent
             // needing stroke[0] and windows
             for stroke in self.current_stroke.windows(2) {
-                painter.line_segment([stroke[0], stroke[1]], self.stroke_type.color());
+                painter.line_segment([stroke[0].1, stroke[1].1], stroke[0].0);
             }
 
             for strokes in &self.strokes {
                 for stroke in strokes.windows(2) {
-                    painter.line_segment([stroke[0], stroke[1]], self.stroke_type.color());
+                    painter.line_segment([stroke[0].1, stroke[1].1], stroke[0].0);
                 }
             }
             // ui.separator();
