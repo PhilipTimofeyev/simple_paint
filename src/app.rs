@@ -7,21 +7,14 @@ use egui::{
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
 pub struct TemplateApp {
-    // Example stuff:
-    label: String,
     strokes: Vec<Vec<Pos2>>,
     current_stroke: Vec<Pos2>,
-
-    #[serde(skip)] // This how you opt-out of serialization of a field
-    value: f32,
+    // #[serde(skip)] // This how you opt-out of serialization of a field
 }
 
 impl Default for TemplateApp {
     fn default() -> Self {
         Self {
-            // Example stuff:
-            label: "Hello World!".to_owned(),
-            value: 2.0,
             strokes: Vec::default(),
             current_stroke: Vec::default(),
         }
@@ -80,6 +73,8 @@ impl eframe::App for TemplateApp {
 
             let size = Vec2::new(500.0, 400.0);
             let (response, painter) = ui.allocate_painter(size, egui::Sense::drag());
+            let rect = response.rect;
+            painter.rect_filled(rect, 0.0, egui::Color32::WHITE);
 
             if response.dragged() {
                 if let Some(pos) = response.interact_pointer_pos() {
@@ -92,10 +87,14 @@ impl eframe::App for TemplateApp {
                 self.strokes.push(current_strokes);
             }
 
-            let rect = response.rect;
-
-            // background
-            painter.rect_filled(rect, 0.0, egui::Color32::WHITE);
+            // Maybe create a stroke struct that is an array of two Pos2 structs to prevent
+            // needing stroke[0] and windows
+            for stroke in self.current_stroke.windows(2) {
+                painter.line_segment(
+                    [stroke[0], stroke[1]],
+                    egui::Stroke::new(2.0, egui::Color32::BLACK),
+                );
+            }
 
             for strokes in &self.strokes {
                 for stroke in strokes.windows(2) {
@@ -111,7 +110,7 @@ impl eframe::App for TemplateApp {
             //     "https://github.com/emilk/eframe_template/blob/main/",
             //     "Source code."
             // ));
-            //
+
             // ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
             //     powered_by_egui_and_eframe(ui);
             //     egui::warn_if_debug_build(ui);
