@@ -9,6 +9,7 @@ use egui::{
 pub struct TemplateApp {
     strokes: Vec<Vec<Pos2>>,
     current_stroke: Vec<Pos2>,
+    stroke_type: Color,
     // #[serde(skip)] // This how you opt-out of serialization of a field
 }
 
@@ -17,6 +18,7 @@ impl Default for TemplateApp {
         Self {
             strokes: Vec::default(),
             current_stroke: Vec::default(),
+            stroke_type: Color::Black,
         }
     }
 }
@@ -34,6 +36,23 @@ impl TemplateApp {
         // } else {
         Default::default()
         // }
+    }
+}
+
+#[derive(PartialEq, Debug, serde::Serialize, serde::Deserialize)]
+enum Color {
+    Black,
+    Yellow,
+    Red,
+}
+
+impl Color {
+    fn color(&self) -> egui::Stroke {
+        match self {
+            Self::Black => egui::Stroke::new(2.0, egui::Color32::BLACK),
+            Self::Yellow => egui::Stroke::new(2.0, egui::Color32::YELLOW),
+            Self::Red => egui::Stroke::new(2.0, egui::Color32::RED),
+        }
     }
 }
 
@@ -71,6 +90,14 @@ impl eframe::App for TemplateApp {
             // The central panel the region left after adding TopPanel's and SidePanel's
             ui.heading("Simple Paint");
 
+            egui::ComboBox::from_label("Color")
+                .selected_text(format!("{:?}", self.stroke_type))
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(&mut self.stroke_type, Color::Black, "Black");
+                    ui.selectable_value(&mut self.stroke_type, Color::Yellow, "Yellow");
+                    ui.selectable_value(&mut self.stroke_type, Color::Red, "Red");
+                });
+
             let size = Vec2::new(500.0, 400.0);
             let (response, painter) = ui.allocate_painter(size, egui::Sense::drag());
             let rect = response.rect;
@@ -90,18 +117,12 @@ impl eframe::App for TemplateApp {
             // Maybe create a stroke struct that is an array of two Pos2 structs to prevent
             // needing stroke[0] and windows
             for stroke in self.current_stroke.windows(2) {
-                painter.line_segment(
-                    [stroke[0], stroke[1]],
-                    egui::Stroke::new(2.0, egui::Color32::BLACK),
-                );
+                painter.line_segment([stroke[0], stroke[1]], self.stroke_type.color());
             }
 
             for strokes in &self.strokes {
                 for stroke in strokes.windows(2) {
-                    painter.line_segment(
-                        [stroke[0], stroke[1]],
-                        egui::Stroke::new(2.0, egui::Color32::BLACK),
-                    );
+                    painter.line_segment([stroke[0], stroke[1]], self.stroke_type.color());
                 }
             }
             // ui.separator();
