@@ -1,9 +1,16 @@
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
+use egui::{
+    epaint::{self, RectShape},
+    Color32, CornerRadius, LayerId, Pos2, Rect, Sense, Stroke, Vec2,
+};
+
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
 pub struct TemplateApp {
     // Example stuff:
     label: String,
+    strokes: Vec<Vec<Pos2>>,
+    current_stroke: Vec<Pos2>,
 
     #[serde(skip)] // This how you opt-out of serialization of a field
     value: f32,
@@ -14,7 +21,9 @@ impl Default for TemplateApp {
         Self {
             // Example stuff:
             label: "Hello World!".to_owned(),
-            value: 2.7,
+            value: 2.0,
+            strokes: Vec::default(),
+            current_stroke: Vec::default(),
         }
     }
 }
@@ -27,11 +36,11 @@ impl TemplateApp {
 
         // Load previous app state (if any).
         // Note that you must enable the `persistence` feature for this to work.
-        if let Some(storage) = cc.storage {
-            eframe::get_value(storage, eframe::APP_KEY).unwrap_or_default()
-        } else {
-            Default::default()
-        }
+        // if let Some(storage) = cc.storage {
+        // eframe::get_value(storage, eframe::APP_KEY).unwrap_or_default()
+        // } else {
+        Default::default()
+        // }
     }
 }
 
@@ -67,29 +76,46 @@ impl eframe::App for TemplateApp {
 
         egui::CentralPanel::default().show(ctx, |ui| {
             // The central panel the region left after adding TopPanel's and SidePanel's
-            ui.heading("eframe template");
+            ui.heading("Simple Paint");
 
-            ui.horizontal(|ui| {
-                ui.label("Write something: ");
-                ui.text_edit_singleline(&mut self.label);
-            });
+            let size = Vec2::new(500.0, 400.0);
+            let (response, painter) = ui.allocate_painter(size, egui::Sense::drag());
 
-            ui.add(egui::Slider::new(&mut self.value, 0.0..=10.0).text("value"));
-            if ui.button("Increment").clicked() {
-                self.value += 1.0;
+            if response.dragged() {
+                if let Some(pos) = response.interact_pointer_pos() {
+                    self.current_stroke.push(pos);
+                }
             }
 
-            ui.separator();
+            if response.drag_stopped() {
+                let current_strokes = std::mem::take(&mut self.current_stroke);
+                self.strokes.push(current_strokes);
+            }
 
-            ui.add(egui::github_link_file!(
-                "https://github.com/emilk/eframe_template/blob/main/",
-                "Source code."
-            ));
+            let rect = response.rect;
 
-            ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
-                powered_by_egui_and_eframe(ui);
-                egui::warn_if_debug_build(ui);
-            });
+            // background
+            painter.rect_filled(rect, 0.0, egui::Color32::WHITE);
+
+            for strokes in &self.strokes {
+                for stroke in strokes.windows(2) {
+                    painter.line_segment(
+                        [stroke[0], stroke[1]],
+                        egui::Stroke::new(2.0, egui::Color32::BLACK),
+                    );
+                }
+            }
+            // ui.separator();
+            //
+            // ui.add(egui::github_link_file!(
+            //     "https://github.com/emilk/eframe_template/blob/main/",
+            //     "Source code."
+            // ));
+            //
+            // ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
+            //     powered_by_egui_and_eframe(ui);
+            //     egui::warn_if_debug_build(ui);
+            // });
         });
     }
 }
