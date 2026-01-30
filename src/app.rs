@@ -1,5 +1,5 @@
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
-use egui::{Color32, CornerRadius, LayerId, Pos2, Rect, Sense, Stroke, Vec2};
+use egui::{Color32, CornerRadius, LayerId, Pos2, Rect, Response, Sense, Stroke, Vec2};
 
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
@@ -7,6 +7,7 @@ pub struct TemplateApp {
     strokes: Vec<Vec<(Stroke, Pos2)>>,
     current_stroke: Vec<(Stroke, Pos2)>,
     stroke_type: Stroke,
+    tool: Tool,
     // #[serde(skip)] // This how you opt-out of serialization of a field
 }
 
@@ -16,6 +17,7 @@ impl Default for TemplateApp {
             strokes: Vec::default(),
             current_stroke: Vec::default(),
             stroke_type: egui::Stroke::new(2.0, egui::Color32::BLACK),
+            tool: Tool::Pen,
         }
     }
 }
@@ -34,6 +36,40 @@ impl TemplateApp {
         Default::default()
         // }
     }
+
+    fn draw(&mut self, painter: &egui::Painter, response: Response) {
+        if response.dragged() {
+            if let Some(pos) = response.interact_pointer_pos() {
+                self.current_stroke.push((self.stroke_type, pos));
+            }
+        }
+
+        if response.drag_stopped() {
+            let current_strokes = std::mem::take(&mut self.current_stroke);
+            self.strokes.push(current_strokes);
+        }
+
+        // draw current stroke in realtime
+        for stroke in self.current_stroke.windows(2) {
+            let point_a = stroke[0].1;
+            let point_b = stroke[1].1;
+            painter.line_segment([point_a, point_b], stroke[0].0);
+        }
+
+        for strokes in &self.strokes {
+            for stroke in strokes.windows(2) {
+                let point_a = stroke[0].1;
+                let point_b = stroke[1].1;
+                painter.line_segment([point_a, point_b], stroke[0].0);
+            }
+        }
+    }
+}
+
+#[derive(PartialEq, serde::Deserialize, serde::Serialize)]
+enum Tool {
+    Pen,
+    Erase,
 }
 
 impl eframe::App for TemplateApp {
@@ -71,10 +107,17 @@ impl eframe::App for TemplateApp {
             ui.heading("Simple Paint");
 
             ui.horizontal(|ui| {
-                ui.label("Brush color:");
+                ui.label("Color:");
                 ui.color_edit_button_srgba(&mut self.stroke_type.color);
-                ui.label("Brush width:");
+                ui.label("Pen width:");
                 ui.add(egui::Slider::new(&mut self.stroke_type.width, 0.5..=12.0));
+                if ui.add(egui::Button::new("Undo")).clicked() {
+                    self.strokes.pop();
+                }
+
+                ui.selectable_value(&mut self.tool, Tool::Pen, "Pen");
+                ui.selectable_value(&mut self.tool, Tool::Erase, "Erase");
+                // ui.add(label("SelectableLabel", "SelectableLabel"));
             });
 
             let size = Vec2::new(500.0, 400.0);
@@ -82,30 +125,9 @@ impl eframe::App for TemplateApp {
             let rect = response.rect;
             painter.rect_filled(rect, 0.0, egui::Color32::WHITE);
 
-            if response.dragged() {
-                if let Some(pos) = response.interact_pointer_pos() {
-                    self.current_stroke.push((self.stroke_type, pos));
-                }
-            }
-
-            if response.drag_stopped() {
-                let current_strokes = std::mem::take(&mut self.current_stroke);
-                self.strokes.push(current_strokes);
-            }
-
-            // draw current stroke in realtime
-            for stroke in self.current_stroke.windows(2) {
-                let point_a = stroke[0].1;
-                let point_b = stroke[1].1;
-                painter.line_segment([point_a, point_b], stroke[0].0);
-            }
-
-            for strokes in &self.strokes {
-                for stroke in strokes.windows(2) {
-                    let point_a = stroke[0].1;
-                    let point_b = stroke[1].1;
-                    painter.line_segment([point_a, point_b], stroke[0].0);
-                }
+            match self.tool {
+                Tool::Pen => self.draw(&painter, response),
+                Tool::Erase => todo!(),
             }
 
             // ui.separator();
