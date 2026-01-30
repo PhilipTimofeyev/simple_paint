@@ -4,9 +4,9 @@ use egui::{Color32, CornerRadius, LayerId, Pos2, Rect, Sense, Stroke, Vec2};
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
 pub struct TemplateApp {
-    strokes: Vec<Vec<((Color32, f32), Pos2)>>,
-    current_stroke: Vec<((Color32, f32), Pos2)>,
-    stroke_type: (Color32, f32),
+    strokes: Vec<Vec<(Stroke, Pos2)>>,
+    current_stroke: Vec<(Stroke, Pos2)>,
+    stroke_type: Stroke,
     // #[serde(skip)] // This how you opt-out of serialization of a field
 }
 
@@ -15,7 +15,7 @@ impl Default for TemplateApp {
         Self {
             strokes: Vec::default(),
             current_stroke: Vec::default(),
-            stroke_type: (egui::Color32::BLACK, 2.0),
+            stroke_type: egui::Stroke::new(2.0, egui::Color32::BLACK),
         }
     }
 }
@@ -72,8 +72,9 @@ impl eframe::App for TemplateApp {
 
             ui.horizontal(|ui| {
                 ui.label("Brush color:");
-                ui.color_edit_button_srgba(&mut self.stroke_type.0);
-                ui.add(egui::Slider::new(&mut self.stroke_type.1, 0.5..=12.0).text("Brush Width"));
+                ui.color_edit_button_srgba(&mut self.stroke_type.color);
+                ui.label("Brush width:");
+                ui.add(egui::Slider::new(&mut self.stroke_type.width, 0.5..=12.0));
             });
 
             let size = Vec2::new(500.0, 400.0);
@@ -83,8 +84,7 @@ impl eframe::App for TemplateApp {
 
             if response.dragged() {
                 if let Some(pos) = response.interact_pointer_pos() {
-                    self.current_stroke
-                        .push(((self.stroke_type.0, self.stroke_type.1), pos));
+                    self.current_stroke.push((self.stroke_type, pos));
                 }
             }
 
@@ -93,23 +93,21 @@ impl eframe::App for TemplateApp {
                 self.strokes.push(current_strokes);
             }
 
-            // Maybe create a stroke struct that is an array of two Pos2 structs to prevent
-            // needing stroke[0] and windows
+            // draw current stroke in realtime
             for stroke in self.current_stroke.windows(2) {
-                painter.line_segment(
-                    [stroke[0].1, stroke[1].1],
-                    egui::Stroke::new(stroke[0].0 .1, stroke[0].0 .0),
-                );
+                let point_a = stroke[0].1;
+                let point_b = stroke[1].1;
+                painter.line_segment([point_a, point_b], stroke[0].0);
             }
 
             for strokes in &self.strokes {
                 for stroke in strokes.windows(2) {
-                    painter.line_segment(
-                        [stroke[0].1, stroke[1].1],
-                        egui::Stroke::new(stroke[0].0 .1, stroke[0].0 .0),
-                    );
+                    let point_a = stroke[0].1;
+                    let point_b = stroke[1].1;
+                    painter.line_segment([point_a, point_b], stroke[0].0);
                 }
             }
+
             // ui.separator();
             //
             // ui.add(egui::github_link_file!(
