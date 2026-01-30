@@ -6,7 +6,7 @@ use egui::{Color32, CornerRadius, LayerId, Pos2, Rect, Sense, Stroke, Vec2};
 pub struct TemplateApp {
     strokes: Vec<Vec<((Color32, f32), Pos2)>>,
     current_stroke: Vec<((Color32, f32), Pos2)>,
-    stroke_type: (Color, f32),
+    stroke_type: (Color32, f32),
     // #[serde(skip)] // This how you opt-out of serialization of a field
 }
 
@@ -15,7 +15,7 @@ impl Default for TemplateApp {
         Self {
             strokes: Vec::default(),
             current_stroke: Vec::default(),
-            stroke_type: (Color::Black, 2.0),
+            stroke_type: (egui::Color32::BLACK, 2.0),
         }
     }
 }
@@ -33,23 +33,6 @@ impl TemplateApp {
         // } else {
         Default::default()
         // }
-    }
-}
-
-#[derive(PartialEq, Debug, serde::Serialize, serde::Deserialize)]
-enum Color {
-    Black,
-    Yellow,
-    Red,
-}
-
-impl Color {
-    fn color(&self) -> egui::Color32 {
-        match self {
-            Self::Black => egui::Color32::BLACK,
-            Self::Yellow => egui::Color32::YELLOW,
-            Self::Red => egui::Color32::RED,
-        }
     }
 }
 
@@ -88,13 +71,8 @@ impl eframe::App for TemplateApp {
             ui.heading("Simple Paint");
 
             ui.horizontal(|ui| {
-                egui::ComboBox::from_label("Color")
-                    .selected_text(format!("{:?}", self.stroke_type.0))
-                    .show_ui(ui, |ui| {
-                        ui.selectable_value(&mut self.stroke_type.0, Color::Black, "Black");
-                        ui.selectable_value(&mut self.stroke_type.0, Color::Yellow, "Yellow");
-                        ui.selectable_value(&mut self.stroke_type.0, Color::Red, "Red");
-                    });
+                ui.label("Brush color:");
+                ui.color_edit_button_srgba(&mut self.stroke_type.0);
                 ui.add(egui::Slider::new(&mut self.stroke_type.1, 0.5..=12.0).text("Brush Width"));
             });
 
@@ -106,7 +84,7 @@ impl eframe::App for TemplateApp {
             if response.dragged() {
                 if let Some(pos) = response.interact_pointer_pos() {
                     self.current_stroke
-                        .push(((self.stroke_type.0.color(), self.stroke_type.1), pos));
+                        .push(((self.stroke_type.0, self.stroke_type.1), pos));
                 }
             }
 
