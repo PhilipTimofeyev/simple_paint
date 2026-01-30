@@ -4,8 +4,8 @@ use egui::{Color32, CornerRadius, LayerId, Pos2, Rect, Response, Sense, Stroke, 
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
 pub struct TemplateApp {
-    strokes: Vec<Vec<(Stroke, Pos2)>>,
-    current_stroke: Vec<(Stroke, Pos2)>,
+    strokes: Vec<SingleStroke>,
+    current_stroke: Vec<Pos2>,
     stroke_type: Stroke,
     tool: Tool,
     // #[serde(skip)] // This how you opt-out of serialization of a field
@@ -37,39 +37,64 @@ impl TemplateApp {
         // }
     }
 
-    fn draw(&mut self, painter: &egui::Painter, response: Response) {
+    fn draw(&mut self, painter: &egui::Painter, response: &Response) {
         if response.dragged() {
             if let Some(pos) = response.interact_pointer_pos() {
-                self.current_stroke.push((self.stroke_type, pos));
+                if self.current_stroke.len() != 2 {
+                    self.current_stroke.push(pos);
+                } else {
+                    let single_stroke = SingleStroke {
+                        points: [self.current_stroke[0], self.current_stroke[1]],
+                        stroke: self.stroke_type,
+                    };
+                    self.strokes.push(single_stroke);
+                    self.current_stroke.remove(0);
+                }
             }
         }
 
         if response.drag_stopped() {
-            let current_strokes = std::mem::take(&mut self.current_stroke);
-            self.strokes.push(current_strokes);
-        }
-
-        // draw current stroke in realtime
-        for stroke in self.current_stroke.windows(2) {
-            let point_a = stroke[0].1;
-            let point_b = stroke[1].1;
-            painter.line_segment([point_a, point_b], stroke[0].0);
-        }
-
-        for strokes in &self.strokes {
-            for stroke in strokes.windows(2) {
-                let point_a = stroke[0].1;
-                let point_b = stroke[1].1;
-                painter.line_segment([point_a, point_b], stroke[0].0);
-            }
+            self.current_stroke.clear();
         }
     }
+
+    // fn erase(&mut self, response: &Response) {
+    //     let mut updated_strokes: Vec<Vec<(Stroke, Pos2)>> = Vec::new();
+    //     let mut strokes: Vec<(Stroke, Pos2)> = Vec::new();
+    //
+    //     if response.dragged() {
+    //         if let Some(pos) = response.interact_pointer_pos() {
+    //             for stroke in &self.strokes {
+    //                 for (stroke, point) in stroke {
+    //                     if point.distance(pos) > 2.0 {
+    //                         strokes.push((*stroke, *point));
+    //                     } else if strokes.len() > 1 {
+    //                         let working_stroke = std::mem::take(&mut strokes);
+    //                         updated_strokes.push(working_stroke);
+    //                     }
+    //                 }
+    //                 let working_stroke = std::mem::take(&mut strokes);
+    //                 updated_strokes.push(working_stroke);
+    //             }
+    //         }
+    //     }
+    //     if updated_strokes.len() > 1 {
+    //         // println!("{:?}", updated_strokes);
+    //         self.strokes = updated_strokes;
+    //     }
+    // }
 }
 
 #[derive(PartialEq, serde::Deserialize, serde::Serialize)]
 enum Tool {
     Pen,
     Erase,
+}
+
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
+struct SingleStroke {
+    stroke: egui::Stroke,
+    points: [Pos2; 2],
 }
 
 impl eframe::App for TemplateApp {
@@ -126,8 +151,13 @@ impl eframe::App for TemplateApp {
             painter.rect_filled(rect, 0.0, egui::Color32::WHITE);
 
             match self.tool {
-                Tool::Pen => self.draw(&painter, response),
+                Tool::Pen => self.draw(&painter, &response),
                 Tool::Erase => todo!(),
+            }
+
+            // Move to draw canvas function
+            for strokes in &self.strokes {
+                painter.line_segment(strokes.points, strokes.stroke);
             }
 
             // ui.separator();
