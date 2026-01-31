@@ -5,7 +5,8 @@ use egui::{Color32, CornerRadius, LayerId, Pos2, Rect, Response, Sense, Stroke, 
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
 pub struct TemplateApp {
     strokes: Vec<SingleStroke>,
-    current_stroke: Vec<Pos2>,
+    current_stroke: Vec<[Pos2; 2]>,
+    last_pos: Option<Pos2>,
     stroke_type: Stroke,
     tool: Tool,
     // #[serde(skip)] // This how you opt-out of serialization of a field
@@ -16,6 +17,7 @@ impl Default for TemplateApp {
         Self {
             strokes: Vec::default(),
             current_stroke: Vec::default(),
+            last_pos: None,
             stroke_type: egui::Stroke::new(2.0, egui::Color32::BLACK),
             tool: Tool::Pen,
         }
@@ -37,52 +39,51 @@ impl TemplateApp {
         // }
     }
 
-    fn draw(&mut self, painter: &egui::Painter, response: &Response) {
-        if response.dragged() {
-            if let Some(pos) = response.interact_pointer_pos() {
-                if self.current_stroke.len() != 2 {
-                    self.current_stroke.push(pos);
-                } else {
-                    let single_stroke = SingleStroke {
-                        points: [self.current_stroke[0], self.current_stroke[1]],
-                        stroke: self.stroke_type,
-                    };
-                    self.strokes.push(single_stroke);
-                    self.current_stroke.remove(0);
+    fn draw(&mut self, response: &Response, painter: &egui::Painter) {
+        if let Some(pen_position) = response.interact_pointer_pos() {
+            if response.dragged() {
+                if let Some(prev) = self.last_pos {
+                    // Modify this to change resolution. Less tiny segments = lower resolution
+                    if prev.distance(pen_position) > 0.0 {
+                        self.current_stroke.push([prev, pen_position]);
+                    }
                 }
+                self.last_pos = Some(pen_position);
             }
-        }
 
-        if response.drag_stopped() {
-            self.current_stroke.clear();
+            // draw strokes in realtime
+            for seg in &self.current_stroke {
+                painter.line_segment(*seg, self.stroke_type);
+            }
+
+            if response.drag_stopped() {
+                if !self.current_stroke.is_empty() {
+                    self.strokes.push(SingleStroke {
+                        stroke: self.stroke_type,
+                        points: std::mem::take(&mut self.current_stroke),
+                    });
+                }
+                self.last_pos = None;
+            }
         }
     }
 
-    // fn erase(&mut self, response: &Response) {
-    //     let mut updated_strokes: Vec<Vec<(Stroke, Pos2)>> = Vec::new();
-    //     let mut strokes: Vec<(Stroke, Pos2)> = Vec::new();
-    //
-    //     if response.dragged() {
-    //         if let Some(pos) = response.interact_pointer_pos() {
-    //             for stroke in &self.strokes {
-    //                 for (stroke, point) in stroke {
-    //                     if point.distance(pos) > 2.0 {
-    //                         strokes.push((*stroke, *point));
-    //                     } else if strokes.len() > 1 {
-    //                         let working_stroke = std::mem::take(&mut strokes);
-    //                         updated_strokes.push(working_stroke);
-    //                     }
-    //                 }
-    //                 let working_stroke = std::mem::take(&mut strokes);
-    //                 updated_strokes.push(working_stroke);
-    //             }
-    //         }
-    //     }
-    //     if updated_strokes.len() > 1 {
-    //         // println!("{:?}", updated_strokes);
-    //         self.strokes = updated_strokes;
-    //     }
-    // }
+    fn erase(&mut self, response: &Response) {
+        if !response.dragged() {
+            return;
+        }
+
+        let Some(eraser_pos) = response.interact_pointer_pos() else {
+        return;
+    };
+
+        for stroke in &mut self.strokes {
+            stroke.points.retain(|seg| {
+                let [a, b] = *seg;
+                cursor_to_segment_distance(eraser_pos, a, b) > self.stroke_type.width
+            });
+        }
+    }
 }
 
 #[derive(PartialEq, serde::Deserialize, serde::Serialize)]
@@ -91,10 +92,20 @@ enum Tool {
     Erase,
 }
 
-#[derive(Debug, serde::Deserialize, serde::Serialize)]
+fn cursor_to_segment_distance(cursor_pos: Pos2, endpoint_a: Pos2, endpoint_b: Pos2) -> f32 {
+    let vector_ab = endpoint_b - endpoint_a;
+    let vector_ac = cursor_pos - endpoint_a;
+
+    let t = (vector_ac.dot(vector_ab) / vector_ab.dot(vector_ab)).clamp(0.0, 1.0);
+    let closest = endpoint_a + vector_ab * t;
+
+    cursor_pos.distance(closest)
+}
+
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 struct SingleStroke {
     stroke: egui::Stroke,
-    points: [Pos2; 2],
+    points: Vec<[Pos2; 2]>,
 }
 
 impl eframe::App for TemplateApp {
@@ -151,13 +162,16 @@ impl eframe::App for TemplateApp {
             painter.rect_filled(rect, 0.0, egui::Color32::WHITE);
 
             match self.tool {
-                Tool::Pen => self.draw(&painter, &response),
-                Tool::Erase => todo!(),
+                Tool::Pen => self.draw(&response, &painter),
+                // Tool::Erase => todo!(), //
+                Tool::Erase => self.erase(&response),
             }
 
             // Move to draw canvas function
-            for strokes in &self.strokes {
-                painter.line_segment(strokes.points, strokes.stroke);
+            for stroke in &self.strokes {
+                for line in &stroke.points {
+                    painter.line_segment(*line, stroke.stroke);
+                }
             }
 
             // ui.separator();
