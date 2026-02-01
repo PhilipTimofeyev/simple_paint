@@ -5,7 +5,7 @@ use egui::{Color32, CornerRadius, LayerId, Pos2, Rect, Response, Sense, Stroke, 
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
 pub struct TemplateApp {
     strokes: Vec<SingleStroke>,
-    current_stroke: Vec<[Pos2; 2]>,
+    segments: Vec<Segment>,
     last_pos: Option<Pos2>,
     stroke_type: Stroke,
     tool: Tool,
@@ -16,7 +16,7 @@ impl Default for TemplateApp {
     fn default() -> Self {
         Self {
             strokes: Vec::default(),
-            current_stroke: Vec::default(),
+            segments: Vec::default(),
             last_pos: None,
             stroke_type: egui::Stroke::new(2.0, egui::Color32::BLACK),
             tool: Tool::Pen,
@@ -45,22 +45,22 @@ impl TemplateApp {
                 if let Some(prev) = self.last_pos {
                     // Modify this to change resolution. Less tiny segments = lower resolution
                     if prev.distance(pen_position) > 0.0 {
-                        self.current_stroke.push([prev, pen_position]);
+                        self.segments.push(Segment::new(prev, pen_position));
                     }
                 }
                 self.last_pos = Some(pen_position);
             }
 
             // draw strokes in realtime
-            for seg in &self.current_stroke {
-                painter.line_segment(*seg, self.stroke_type);
+            for seg in &self.segments {
+                painter.line_segment(seg.segment, self.stroke_type);
             }
 
             if response.drag_stopped() {
-                if !self.current_stroke.is_empty() {
+                if !self.segments.is_empty() {
                     self.strokes.push(SingleStroke {
                         stroke: self.stroke_type,
-                        points: std::mem::take(&mut self.current_stroke),
+                        points: std::mem::take(&mut self.segments),
                     });
                 }
                 self.last_pos = None;
@@ -69,19 +69,14 @@ impl TemplateApp {
     }
 
     fn erase(&mut self, response: &Response) {
-        if !response.dragged() {
-            return;
-        }
-
-        let Some(eraser_pos) = response.interact_pointer_pos() else {
-        return;
-    };
-
-        for stroke in &mut self.strokes {
-            stroke.points.retain(|seg| {
-                let [a, b] = *seg;
-                cursor_to_segment_distance(eraser_pos, a, b) > self.stroke_type.width
-            });
+        if response.dragged() {
+            if let Some(eraser_pos) = response.interact_pointer_pos() {
+                for stroke in &mut self.strokes {
+                    stroke.points.retain(|seg| {
+                        cursor_to_segment_distance(eraser_pos, *seg) > self.stroke_type.width
+                    });
+                }
+            }
         }
     }
 }
@@ -92,20 +87,32 @@ enum Tool {
     Erase,
 }
 
-fn cursor_to_segment_distance(cursor_pos: Pos2, endpoint_a: Pos2, endpoint_b: Pos2) -> f32 {
+fn cursor_to_segment_distance(cursor_pos: Pos2, segment: Segment) -> f32 {
+    let [endpoint_a, endpoint_b] = segment.segment;
     let vector_ab = endpoint_b - endpoint_a;
     let vector_ac = cursor_pos - endpoint_a;
 
     let t = (vector_ac.dot(vector_ab) / vector_ab.dot(vector_ab)).clamp(0.0, 1.0);
-    let closest = endpoint_a + vector_ab * t;
+    let closest_point = endpoint_a + vector_ab * t;
 
-    cursor_pos.distance(closest)
+    cursor_pos.distance(closest_point)
 }
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 struct SingleStroke {
     stroke: egui::Stroke,
-    points: Vec<[Pos2; 2]>,
+    points: Vec<Segment>,
+}
+
+#[derive(Debug, serde::Deserialize, serde::Serialize, Copy, Clone)]
+struct Segment {
+    segment: [Pos2; 2],
+}
+
+impl Segment {
+    fn new(a: Pos2, b: Pos2) -> Self {
+        Self { segment: [a, b] }
+    }
 }
 
 impl eframe::App for TemplateApp {
@@ -169,8 +176,8 @@ impl eframe::App for TemplateApp {
 
             // Move to draw canvas function
             for stroke in &self.strokes {
-                for line in &stroke.points {
-                    painter.line_segment(*line, stroke.stroke);
+                for segment in &stroke.points {
+                    painter.line_segment(segment.segment, stroke.stroke);
                 }
             }
 
