@@ -1,5 +1,5 @@
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
-use egui::{Color32, CornerRadius, LayerId, Pos2, Rect, Response, Sense, Stroke, Vec2};
+use egui::{Align2, Color32, CornerRadius, LayerId, Pos2, Rect, Response, Sense, Stroke, Vec2};
 
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
@@ -9,6 +9,7 @@ pub struct TemplateApp {
     last_pos: Option<Pos2>,
     stroke_type: Stroke,
     tool: Tool,
+    rect: egui::Rect,
     // #[serde(skip)] // This how you opt-out of serialization of a field
 }
 
@@ -20,6 +21,7 @@ impl Default for TemplateApp {
             last_pos: None,
             stroke_type: egui::Stroke::new(2.0, egui::Color32::BLACK),
             tool: Tool::Pen,
+            rect: Rect::NOTHING,
         }
     }
 }
@@ -35,6 +37,7 @@ impl TemplateApp {
         // if let Some(storage) = cc.storage {
         // eframe::get_value(storage, eframe::APP_KEY).unwrap_or_default()
         // } else {
+
         Default::default()
         // }
     }
@@ -125,6 +128,16 @@ impl eframe::App for TemplateApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // Put your widgets into a `SidePanel`, `TopBottomPanel`, `CentralPanel`, `Window` or `Area`.
         // For inspiration and more examples, go to https://emilk.github.io/egui
+        // if true {
+        //     egui::Window::new("Mo")
+        //         .collapsible(false)
+        //         .anchor(Align2::CENTER_CENTER, [0.0, 0.0])
+        //         .resizable(false)
+        //         // .open(&mut self.window_open)
+        //         .show(ctx, |ui| {
+        //             ui.label("contents");
+        //         });
+        // }
 
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             // The top panel is often a good place for a menu bar:
@@ -147,7 +160,9 @@ impl eframe::App for TemplateApp {
 
         egui::CentralPanel::default().show(ctx, |ui| {
             // The central panel the region left after adding TopPanel's and SidePanel's
-            ui.heading("Simple Paint");
+            ui.vertical_centered(|ui| {
+                ui.heading("Centered Heading");
+            });
 
             ui.horizontal(|ui| {
                 ui.label("Color:");
@@ -160,27 +175,32 @@ impl eframe::App for TemplateApp {
 
                 ui.selectable_value(&mut self.tool, Tool::Pen, "Pen");
                 ui.selectable_value(&mut self.tool, Tool::Erase, "Erase");
-                // ui.add(label("SelectableLabel", "SelectableLabel"));
             });
 
-            let size = Vec2::new(500.0, 400.0);
-            let (response, painter) = ui.allocate_painter(size, egui::Sense::drag());
-            let rect = response.rect;
-            painter.rect_filled(rect, 0.0, egui::Color32::WHITE);
+            let scene = egui::Scene::new().zoom_range(0.0..=10.0);
+            let scene_response = scene.show(ui, &mut self.rect, |ui| {
+                ui.allocate_painter(
+                    Vec2 {
+                        x: 2000.0,
+                        y: 1500.0,
+                    },
+                    egui::Sense::drag(),
+                )
+            });
+
+            let (response, painter) = scene_response.inner;
+
+            painter.rect_filled(self.rect, 0.0, egui::Color32::WHITE);
 
             match self.tool {
                 Tool::Pen => self.draw(&response, &painter),
-                // Tool::Erase => todo!(), //
                 Tool::Erase => self.erase(&response),
             }
-
-            // Move to draw canvas function
             for stroke in &self.strokes {
                 for segment in &stroke.points {
                     painter.line_segment(segment.segment, stroke.stroke);
                 }
             }
-
             // ui.separator();
             //
             // ui.add(egui::github_link_file!(
