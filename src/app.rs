@@ -1,34 +1,27 @@
-/// We derive Deserialize/Serialize so we can persist app state on shutdown.
-use egui::{
-    Align2, Color32, CornerRadius, LayerId, Margin, Pos2, Rect, Response, Sense, Stroke, Vec2,
-};
+use crate::draw::canvas;
+use crate::utils;
+use egui::{Response, Stroke, Vec2};
 
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
-pub struct TemplateApp {
-    strokes: Vec<SingleStroke>,
-    segments: Vec<Segment>,
-    last_pos: Option<Pos2>,
+pub struct SimplePaintApp {
+    canvas: canvas::Canvas,
     stroke_type: Stroke,
     tool: Tool,
-    rect: egui::Rect,
     // #[serde(skip)] // This how you opt-out of serialization of a field
 }
 
-impl Default for TemplateApp {
+impl Default for SimplePaintApp {
     fn default() -> Self {
         Self {
-            strokes: Vec::default(),
-            segments: Vec::default(),
-            last_pos: None,
+            canvas: canvas::Canvas::default(),
             stroke_type: egui::Stroke::new(2.0, egui::Color32::BLACK),
             tool: Tool::Pen,
-            rect: Rect::NOTHING,
         }
     }
 }
 
-impl TemplateApp {
+impl SimplePaintApp {
     /// Called once before the first frame.
     pub fn new(_cc: &eframe::CreationContext<'_>) -> Self {
         // This is also where you can customize the look and feel of egui using
@@ -47,28 +40,31 @@ impl TemplateApp {
     fn draw(&mut self, response: &Response, painter: &egui::Painter) {
         if let Some(pen_position) = response.interact_pointer_pos() {
             if response.dragged() {
-                if let Some(prev) = self.last_pos {
+                if let Some(prev) = self.canvas.last_cursor_pos {
                     // Modify this to change resolution. Less tiny segments = lower resolution
                     if prev.distance(pen_position) > 0.0 {
-                        self.segments.push(Segment::new(prev, pen_position));
+                        self.canvas
+                            .segments
+                            .push(canvas::Segment::new(prev, pen_position));
                     }
                 }
-                self.last_pos = Some(pen_position);
+
+                self.canvas.last_cursor_pos = Some(pen_position);
             }
 
             // draw strokes in realtime
-            for seg in &self.segments {
+            for seg in &self.canvas.segments {
                 painter.line_segment(seg.segment, self.stroke_type);
             }
 
             if response.drag_stopped() {
-                if !self.segments.is_empty() {
-                    self.strokes.push(SingleStroke {
+                if !self.canvas.segments.is_empty() {
+                    self.canvas.strokes.push(canvas::SingleStroke {
                         stroke: self.stroke_type,
-                        points: std::mem::take(&mut self.segments),
+                        points: std::mem::take(&mut self.canvas.segments),
                     });
                 }
-                self.last_pos = None;
+                self.canvas.last_cursor_pos = None;
             }
         }
     }
@@ -76,9 +72,9 @@ impl TemplateApp {
     fn erase(&mut self, response: &Response) {
         if response.dragged() {
             if let Some(eraser_pos) = response.interact_pointer_pos() {
-                for stroke in &mut self.strokes {
+                for stroke in &mut self.canvas.strokes {
                     stroke.points.retain(|seg| {
-                        cursor_to_segment_distance(eraser_pos, *seg) > self.stroke_type.width
+                        utils::cursor_to_segment_distance(eraser_pos, *seg) > self.stroke_type.width
                     });
                 }
             }
@@ -92,35 +88,7 @@ enum Tool {
     Erase,
 }
 
-fn cursor_to_segment_distance(cursor_pos: Pos2, segment: Segment) -> f32 {
-    let [endpoint_a, endpoint_b] = segment.segment;
-    let vector_ab = endpoint_b - endpoint_a;
-    let vector_ac = cursor_pos - endpoint_a;
-
-    let t = (vector_ac.dot(vector_ab) / vector_ab.dot(vector_ab)).clamp(0.0, 1.0);
-    let closest_point = endpoint_a + vector_ab * t;
-
-    cursor_pos.distance(closest_point)
-}
-
-#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
-struct SingleStroke {
-    stroke: egui::Stroke,
-    points: Vec<Segment>,
-}
-
-#[derive(Debug, serde::Deserialize, serde::Serialize, Copy, Clone)]
-struct Segment {
-    segment: [Pos2; 2],
-}
-
-impl Segment {
-    fn new(a: Pos2, b: Pos2) -> Self {
-        Self { segment: [a, b] }
-    }
-}
-
-impl eframe::App for TemplateApp {
+impl eframe::App for SimplePaintApp {
     /// Called by the framework to save state before shutdown.
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
         eframe::set_value(storage, eframe::APP_KEY, self);
@@ -128,22 +96,7 @@ impl eframe::App for TemplateApp {
 
     /// Called each time the UI needs repainting, which may be many times per second.
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        // Put your widgets into a `SidePanel`, `TopBottomPanel`, `CentralPanel`, `Window` or `Area`.
-        // For inspiration and more examples, go to https://emilk.github.io/egui
-        // if true {
-        //     egui::Window::new("Mo")
-        //         .collapsible(false)
-        //         .anchor(Align2::CENTER_CENTER, [0.0, 0.0])
-        //         .resizable(false)
-        //         // .open(&mut self.window_open)
-        //         .show(ctx, |ui| {
-        //             ui.label("contents");
-        //         });
-        // }
-
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
-            // The top panel is often a good place for a menu bar:
-
             egui::MenuBar::new().ui(ui, |ui| {
                 // NOTE: no File->Quit on web pages!
                 let is_web = cfg!(target_arch = "wasm32");
@@ -184,7 +137,7 @@ impl eframe::App for TemplateApp {
                     );
                     ui.add(egui::Slider::new(&mut self.stroke_type.width, 0.5..=12.0));
                     if ui.add(egui::Button::new("Undo")).clicked() {
-                        self.strokes.pop();
+                        self.canvas.strokes.pop();
                     }
                 })
                 // });
@@ -198,7 +151,7 @@ impl eframe::App for TemplateApp {
             .show(ctx, |ui| {
                 // The central panel the region left after adding TopPanel's and SidePanel's
                 let scene = egui::Scene::new().zoom_range(0.0..=10.0);
-                let scene_response = scene.show(ui, &mut self.rect, |ui| {
+                let scene_response = scene.show(ui, &mut self.canvas.rect, |ui| {
                     ui.allocate_painter(
                         Vec2 {
                             x: 2000.0,
@@ -210,7 +163,7 @@ impl eframe::App for TemplateApp {
 
                 let (response, painter) = scene_response.inner;
 
-                painter.rect_filled(self.rect, 0.0, egui::Color32::WHITE);
+                painter.rect_filled(self.canvas.rect, 0.0, egui::Color32::WHITE);
 
                 if ui.ui_contains_pointer() {
                     match self.tool {
@@ -221,7 +174,7 @@ impl eframe::App for TemplateApp {
                         Tool::Erase => self.erase(&response),
                     }
                 }
-                for stroke in &self.strokes {
+                for stroke in &self.canvas.strokes {
                     for segment in &stroke.points {
                         painter.line_segment(segment.segment, stroke.stroke);
                     }
