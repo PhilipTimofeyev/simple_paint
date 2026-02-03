@@ -1,5 +1,7 @@
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
-use egui::{Align2, Color32, CornerRadius, LayerId, Pos2, Rect, Response, Sense, Stroke, Vec2};
+use egui::{
+    Align2, Color32, CornerRadius, LayerId, Margin, Pos2, Rect, Response, Sense, Stroke, Vec2,
+};
 
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
@@ -42,7 +44,7 @@ impl TemplateApp {
         // }
     }
 
-    fn draw(&mut self, response: &Response, painter: &egui::Painter) {
+    fn draw(&mut self, response: &Response, painter: &egui::Painter, ui: &mut egui::Ui) {
         if let Some(pen_position) = response.interact_pointer_pos() {
             if response.dragged() {
                 if let Some(prev) = self.last_pos {
@@ -158,61 +160,83 @@ impl eframe::App for TemplateApp {
             });
         });
 
-        egui::CentralPanel::default().show(ctx, |ui| {
-            // The central panel the region left after adding TopPanel's and SidePanel's
-            ui.vertical_centered(|ui| {
-                ui.heading("Centered Heading");
+        egui::TopBottomPanel::top("tool panel")
+            .frame(egui::Frame::new().fill(egui::Color32::LIGHT_GRAY))
+            .resizable(false)
+            .max_height(40.0)
+            .show(ctx, |ui| {
+                ui.horizontal_centered(|ui| {
+                    ui.add_space(ui.available_width() / 2.4);
+                    ui.color_edit_button_srgba(&mut self.stroke_type.color);
+                    ui.selectable_value(
+                        &mut self.tool,
+                        Tool::Pen,
+                        egui::RichText::new("Pen")
+                            .size(14.0)
+                            .text_style(egui::TextStyle::Monospace),
+                    );
+                    ui.selectable_value(
+                        &mut self.tool,
+                        Tool::Erase,
+                        egui::RichText::new("Eraser")
+                            .size(14.0)
+                            .text_style(egui::TextStyle::Monospace),
+                    );
+                    ui.add(egui::Slider::new(&mut self.stroke_type.width, 0.5..=12.0));
+                    if ui.add(egui::Button::new("Undo")).clicked() {
+                        self.strokes.pop();
+                    }
+                })
+                // });
+                //
             });
 
-            ui.horizontal(|ui| {
-                ui.label("Color:");
-                ui.color_edit_button_srgba(&mut self.stroke_type.color);
-                ui.label("Pen width:");
-                ui.add(egui::Slider::new(&mut self.stroke_type.width, 0.5..=12.0));
-                if ui.add(egui::Button::new("Undo")).clicked() {
-                    self.strokes.pop();
+        egui::CentralPanel::default()
+            .frame(
+                egui::Frame::new().fill(egui::Color32::DARK_GRAY), // .inner_margin(egui::Margin::symmetric(0, 15)),
+            )
+            .show(ctx, |ui| {
+                // The central panel the region left after adding TopPanel's and SidePanel's
+                let scene = egui::Scene::new().zoom_range(0.0..=10.0);
+                let scene_response = scene.show(ui, &mut self.rect, |ui| {
+                    ui.allocate_painter(
+                        Vec2 {
+                            x: 2000.0,
+                            y: 1500.0,
+                        },
+                        egui::Sense::drag(),
+                    )
+                });
+
+                let (response, painter) = scene_response.inner;
+
+                if ui.ui_contains_pointer() {
+                    ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::Crosshair);
                 }
 
-                ui.selectable_value(&mut self.tool, Tool::Pen, "Pen");
-                ui.selectable_value(&mut self.tool, Tool::Erase, "Erase");
-            });
+                painter.rect_filled(self.rect, 0.0, egui::Color32::WHITE);
 
-            let scene = egui::Scene::new().zoom_range(0.0..=10.0);
-            let scene_response = scene.show(ui, &mut self.rect, |ui| {
-                ui.allocate_painter(
-                    Vec2 {
-                        x: 2000.0,
-                        y: 1500.0,
-                    },
-                    egui::Sense::drag(),
-                )
-            });
-
-            let (response, painter) = scene_response.inner;
-
-            painter.rect_filled(self.rect, 0.0, egui::Color32::WHITE);
-
-            match self.tool {
-                Tool::Pen => self.draw(&response, &painter),
-                Tool::Erase => self.erase(&response),
-            }
-            for stroke in &self.strokes {
-                for segment in &stroke.points {
-                    painter.line_segment(segment.segment, stroke.stroke);
+                match self.tool {
+                    Tool::Pen => self.draw(&response, &painter, ui),
+                    Tool::Erase => self.erase(&response),
                 }
-            }
-            // ui.separator();
-            //
-            // ui.add(egui::github_link_file!(
-            //     "https://github.com/emilk/eframe_template/blob/main/",
-            //     "Source code."
-            // ));
+                for stroke in &self.strokes {
+                    for segment in &stroke.points {
+                        painter.line_segment(segment.segment, stroke.stroke);
+                    }
+                }
+                // ui.separator();
+                //
+                // ui.add(egui::github_link_file!(
+                //     "https://github.com/emilk/eframe_template/blob/main/",
+                //     "Source code."
+                // ));
 
-            // ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
-            //     powered_by_egui_and_eframe(ui);
-            //     egui::warn_if_debug_build(ui);
-            // });
-        });
+                // ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
+                //     powered_by_egui_and_eframe(ui);
+                //     egui::warn_if_debug_build(ui);
+                // });
+            });
     }
 }
 
