@@ -44,7 +44,7 @@ impl TemplateApp {
         // }
     }
 
-    fn draw(&mut self, response: &Response, painter: &egui::Painter, ui: &mut egui::Ui) {
+    fn draw(&mut self, response: &Response, painter: &egui::Painter) {
         if let Some(pen_position) = response.interact_pointer_pos() {
             if response.dragged() {
                 if let Some(prev) = self.last_pos {
@@ -210,15 +210,16 @@ impl eframe::App for TemplateApp {
 
                 let (response, painter) = scene_response.inner;
 
-                if ui.ui_contains_pointer() {
-                    ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::Crosshair);
-                }
-
                 painter.rect_filled(self.rect, 0.0, egui::Color32::WHITE);
 
-                match self.tool {
-                    Tool::Pen => self.draw(&response, &painter, ui),
-                    Tool::Erase => self.erase(&response),
+                if ui.ui_contains_pointer() {
+                    match self.tool {
+                        Tool::Pen => {
+                            ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::Crosshair);
+                            self.draw(&response, &painter);
+                        }
+                        Tool::Erase => self.erase(&response),
+                    }
                 }
                 for stroke in &self.strokes {
                     for segment in &stroke.points {
