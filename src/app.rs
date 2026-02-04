@@ -114,65 +114,73 @@ impl eframe::App for SimplePaintApp {
         });
 
         egui::TopBottomPanel::top("tool panel")
-            .frame(egui::Frame::new().fill(egui::Color32::LIGHT_GRAY))
+            .frame(egui::Frame::new().fill(egui::Color32::from_hex("#adadad").unwrap()))
             .resizable(false)
-            .max_height(40.0)
             .show(ctx, |ui| {
                 ui.horizontal_centered(|ui| {
-                    ui.add_space(20.0);
-                    if ui.add(egui::Button::new("Undo")).clicked() {
-                        self.canvas.strokes.pop();
-                    }
                     ui.add_space(ui.available_width() / 3.7);
 
                     egui::Frame::NONE
-                        .inner_margin(Margin::symmetric(20, 0))
+                        .fill(egui::Color32::from_hex("#dedede").unwrap())
+                        .corner_radius(10.0)
                         .show(ui, |ui| {
-                            egui::Grid::new("some_unique_id")
-                                .min_col_width(50.0)
-                                .show(ui, |ui| {
-                                    ui.color_edit_button_srgba(&mut self.stroke_type.color);
-                                    ui.selectable_value(
-                                        &mut self.tool,
-                                        Tool::Pen,
-                                        egui::RichText::new("Pen")
-                                            .size(14.0)
-                                            .text_style(egui::TextStyle::Monospace),
-                                    );
-                                    ui.selectable_value(
-                                        &mut self.tool,
-                                        Tool::Erase,
-                                        egui::RichText::new("Eraser")
-                                            .size(14.0)
-                                            .text_style(egui::TextStyle::Monospace),
-                                    );
-                                })
-                        });
-
-                    egui::Frame::NONE.show(ui, |ui| {
-                        ui.label("Width");
-                        ui.add(egui::Slider::new(&mut self.stroke_type.width, 0.5..=12.0));
-                    });
-
-                    egui::Frame::NONE
-                        .inner_margin(Margin::symmetric(30, 0))
-                        .show(ui, |ui| {
-                            ui.label("Zoom");
-                            let zoom = egui::DragValue::new(&mut self.canvas.zoom)
-                                .range(0.01..=10.0)
-                                .speed(0.01)
-                                .custom_formatter(|n, _| {
-                                    let n = n * 100.0;
-                                    format!("{n:.0}%")
-                                });
-                            let zoom_response = ui.add(zoom);
-
-                            if zoom_response.dragged() {
-                                self.canvas.canvas_viewport = canvas::build_viewport(
-                                    self.canvas.canvas_area.size(),
-                                    self.canvas.zoom,
-                                );
+                            ui.add_space(30.0);
+                            if ui.add(egui::Button::new("Undo")).clicked() {
+                                self.canvas.strokes.pop();
                             }
+                            ui.color_edit_button_srgba(&mut self.stroke_type.color);
+
+                            egui::Frame::NONE
+                                .stroke(egui::Stroke::new(
+                                    1.5,
+                                    egui::Color32::from_hex("#b8b8b8").unwrap(),
+                                ))
+                                .outer_margin(Margin::symmetric(20, 0))
+                                .show(ui, |ui| {
+                                    egui::Grid::new("tool grid")
+                                        // .min_col_width(0.0)
+                                        .show(ui, |ui| {
+                                            ui.selectable_value(
+                                                &mut self.tool,
+                                                Tool::Pen,
+                                                egui::RichText::new("Pen")
+                                                    // .size(14.0)
+                                                    .text_style(egui::TextStyle::Monospace),
+                                            );
+                                            ui.selectable_value(
+                                                &mut self.tool,
+                                                Tool::Erase,
+                                                egui::RichText::new("Eraser")
+                                                    // .size(14.0)
+                                                    .text_style(egui::TextStyle::Monospace),
+                                            );
+                                        })
+                                });
+                            egui::Frame::NONE.show(ui, |ui| {
+                                ui.label("Width");
+                                ui.add(egui::Slider::new(&mut self.stroke_type.width, 0.5..=12.0));
+                            });
+
+                            egui::Frame::NONE
+                                .inner_margin(Margin::symmetric(30, 0))
+                                .show(ui, |ui| {
+                                    ui.label("Zoom");
+                                    let zoom = egui::DragValue::new(&mut self.canvas.zoom)
+                                        .range(0.01..=10.0)
+                                        .speed(0.01)
+                                        .custom_formatter(|n, _| {
+                                            let n = n * 100.0;
+                                            format!("{n:.0}%")
+                                        });
+                                    let zoom_response = ui.add(zoom);
+
+                                    if zoom_response.dragged() {
+                                        self.canvas.canvas_viewport = canvas::build_viewport(
+                                            self.canvas.canvas_area.size(),
+                                            self.canvas.zoom,
+                                        );
+                                    }
+                                });
                         });
                 })
             });
