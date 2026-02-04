@@ -1,6 +1,6 @@
 use crate::draw::canvas;
 use crate::utils;
-use egui::{Response, Stroke, Vec2};
+use egui::{Response, Stroke};
 
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
@@ -14,7 +14,7 @@ pub struct SimplePaintApp {
 impl Default for SimplePaintApp {
     fn default() -> Self {
         Self {
-            canvas: canvas::Canvas::default(),
+            canvas: canvas::Canvas::new((1920, 1080)),
             stroke_type: egui::Stroke::new(2.0, egui::Color32::BLACK),
             tool: Tool::Pen,
         }
@@ -149,23 +149,15 @@ impl eframe::App for SimplePaintApp {
                 egui::Frame::new().fill(egui::Color32::DARK_GRAY), // .inner_margin(egui::Margin::symmetric(0, 15)),
             )
             .show(ctx, |ui| {
-                // The central panel the region left after adding TopPanel's and SidePanel's
-                let scene = egui::Scene::new().zoom_range(0.0..=10.0);
-                let scene_response = scene.show(ui, &mut self.canvas.rect, |ui| {
-                    ui.allocate_painter(
-                        Vec2 {
-                            x: 2000.0,
-                            y: 1500.0,
-                        },
-                        egui::Sense::drag(),
-                    )
+                let scene = egui::Scene::new().zoom_range(0.1..=10.0);
+                let scene_response = scene.show(ui, &mut self.canvas.canvas_viewport, |ui| {
+                    ui.allocate_painter(self.canvas.canvas_area.size(), egui::Sense::drag())
                 });
 
                 let (response, painter) = scene_response.inner;
+                painter.rect_filled(self.canvas.canvas_area, 0.0, egui::Color32::WHITE);
 
-                painter.rect_filled(self.canvas.rect, 0.0, egui::Color32::WHITE);
-
-                if ui.ui_contains_pointer() {
+                if response.hovered() {
                     match self.tool {
                         Tool::Pen => {
                             ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::Crosshair);
