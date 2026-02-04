@@ -1,13 +1,14 @@
 use crate::draw::canvas;
+use crate::toolbar::main::{Tool, toolbar};
 use crate::utils;
 use egui::{Margin, Response, Stroke};
 
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
 pub struct SimplePaintApp {
-    canvas: canvas::Canvas,
-    stroke_type: Stroke,
-    tool: Tool,
+    pub canvas: canvas::Canvas,
+    pub stroke_type: Stroke,
+    pub tool: Tool,
     // #[serde(skip)] // This how you opt-out of serialization of a field
 }
 
@@ -82,12 +83,6 @@ impl SimplePaintApp {
     }
 }
 
-#[derive(PartialEq, serde::Deserialize, serde::Serialize)]
-enum Tool {
-    Pen,
-    Erase,
-}
-
 impl eframe::App for SimplePaintApp {
     /// Called by the framework to save state before shutdown.
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
@@ -114,75 +109,14 @@ impl eframe::App for SimplePaintApp {
         });
 
         egui::TopBottomPanel::top("tool panel")
-            .frame(egui::Frame::new().fill(egui::Color32::from_hex("#adadad").unwrap()))
+            .frame(egui::Frame::new().fill(egui::Color32::from_hex("#adadad").unwrap_or_default()))
             .resizable(false)
             .show(ctx, |ui| {
+                ui.set_max_height(30.0);
                 ui.horizontal_centered(|ui| {
                     ui.add_space(ui.available_width() / 3.7);
-
-                    egui::Frame::NONE
-                        .fill(egui::Color32::from_hex("#dedede").unwrap())
-                        .corner_radius(10.0)
-                        .show(ui, |ui| {
-                            ui.add_space(30.0);
-                            if ui.add(egui::Button::new("Undo")).clicked() {
-                                self.canvas.strokes.pop();
-                            }
-                            ui.color_edit_button_srgba(&mut self.stroke_type.color);
-
-                            egui::Frame::NONE
-                                .stroke(egui::Stroke::new(
-                                    1.5,
-                                    egui::Color32::from_hex("#b8b8b8").unwrap(),
-                                ))
-                                .outer_margin(Margin::symmetric(20, 0))
-                                .show(ui, |ui| {
-                                    egui::Grid::new("tool grid")
-                                        // .min_col_width(0.0)
-                                        .show(ui, |ui| {
-                                            ui.selectable_value(
-                                                &mut self.tool,
-                                                Tool::Pen,
-                                                egui::RichText::new("Pen")
-                                                    // .size(14.0)
-                                                    .text_style(egui::TextStyle::Monospace),
-                                            );
-                                            ui.selectable_value(
-                                                &mut self.tool,
-                                                Tool::Erase,
-                                                egui::RichText::new("Eraser")
-                                                    // .size(14.0)
-                                                    .text_style(egui::TextStyle::Monospace),
-                                            );
-                                        })
-                                });
-                            egui::Frame::NONE.show(ui, |ui| {
-                                ui.label("Width");
-                                ui.add(egui::Slider::new(&mut self.stroke_type.width, 0.5..=12.0));
-                            });
-
-                            egui::Frame::NONE
-                                .inner_margin(Margin::symmetric(30, 0))
-                                .show(ui, |ui| {
-                                    ui.label("Zoom");
-                                    let zoom = egui::DragValue::new(&mut self.canvas.zoom)
-                                        .range(0.01..=10.0)
-                                        .speed(0.01)
-                                        .custom_formatter(|n, _| {
-                                            let n = n * 100.0;
-                                            format!("{n:.0}%")
-                                        });
-                                    let zoom_response = ui.add(zoom);
-
-                                    if zoom_response.dragged() {
-                                        self.canvas.canvas_viewport = canvas::build_viewport(
-                                            self.canvas.canvas_area.size(),
-                                            self.canvas.zoom,
-                                        );
-                                    }
-                                });
-                        });
-                })
+                    toolbar(self, ui);
+                });
             });
 
         egui::CentralPanel::default()
