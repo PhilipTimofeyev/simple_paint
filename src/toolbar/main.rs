@@ -1,6 +1,6 @@
 use super::super::SimplePaintApp;
 use crate::draw::canvas;
-use egui::Margin;
+use egui::{InnerResponse, Margin, Response};
 
 #[derive(PartialEq, serde::Deserialize, serde::Serialize)]
 pub enum Tool {
@@ -8,7 +8,7 @@ pub enum Tool {
     Erase,
 }
 
-pub fn toolbar(app: &mut SimplePaintApp, ui: &mut egui::Ui) {
+pub fn toolbar(app: &mut SimplePaintApp, ui: &mut egui::Ui) -> InnerResponse<()> {
     egui::Frame::NONE
         .fill(egui::Color32::from_hex("#dedede").unwrap_or_default())
         .corner_radius(10.0)
@@ -16,9 +16,9 @@ pub fn toolbar(app: &mut SimplePaintApp, ui: &mut egui::Ui) {
             ui.add_space(30.0);
 
             // Undo
-            if ui.add(egui::Button::new("Undo")).clicked() {
-                app.canvas.strokes.pop();
-            }
+            // if ui.add(egui::Button::new("Undo")).clicked() {
+            //     app.canvas.strokes.pop();
+            // }
             ui.color_edit_button_srgba(&mut app.stroke_type.color);
 
             // TOOLS
@@ -49,7 +49,7 @@ pub fn toolbar(app: &mut SimplePaintApp, ui: &mut egui::Ui) {
                             canvas::build_viewport(app.canvas.canvas_area.size(), app.canvas.zoom);
                     }
                 });
-        });
+        })
 }
 
 fn tool_frame(app: &mut SimplePaintApp, ui: &mut egui::Ui) {

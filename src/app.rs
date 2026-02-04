@@ -113,8 +113,9 @@ impl eframe::App for SimplePaintApp {
             .resizable(false)
             .show(ctx, |ui| {
                 ui.set_max_height(30.0);
+
                 ui.horizontal_centered(|ui| {
-                    ui.add_space(ui.available_width() / 3.7);
+                    ui.add_space((ui.available_width() / 2.0) - 571.0 / 2.0);
                     toolbar(self, ui);
                 });
             });
