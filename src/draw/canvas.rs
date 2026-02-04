@@ -2,33 +2,36 @@ use egui::{Pos2, Rect};
 
 #[derive(serde::Deserialize, serde::Serialize)]
 pub struct Canvas {
-    pub canvas_viewport: egui::Rect,
+    pub canvas_viewport: Rect,
     pub canvas_area: Rect,
     pub strokes: Vec<SingleStroke>,
     pub segments: Vec<Segment>,
     pub last_cursor_pos: Option<Pos2>,
+    pub zoom: f32,
 }
 
 impl Canvas {
-    pub fn new(dimensions: (u16, u16)) -> Self {
-        let (x, y) = dimensions;
-        let canvas_dimensions = Pos2::new(x as f32, y as f32);
-        let (min, max) = Self::build_viewport(dimensions);
+    pub fn new(canvas_size: egui::Vec2) -> Self {
+        let canvas_dimensions = canvas_size.to_pos2();
+        let initial_zoom = 0.85;
+        let canvas_viewport = build_viewport(canvas_size, initial_zoom);
+
         Self {
-            canvas_viewport: Rect::from_min_max(min, max),
+            canvas_viewport,
             canvas_area: Rect::from_min_max(Pos2::default(), canvas_dimensions),
             strokes: Vec::default(),
             segments: Vec::default(),
             last_cursor_pos: None,
+            zoom: initial_zoom,
         }
     }
 
-    fn build_viewport(dimensions: (u16, u16)) -> (Pos2, Pos2) {
-        let (x, y) = dimensions;
-        let min = Pos2::new(x as f32 / -2.0, y as f32 / -2.0);
-        let max = Pos2::new(x as f32 * 1.5, y as f32 * 1.5);
+    // Ratio between canvas size and viewport size is zoom level
+    pub fn update_zoom(&mut self) {
+        let canvas_size = self.canvas_area.size();
+        let viewport_size = self.canvas_viewport.size();
 
-        (min, max)
+        self.zoom = canvas_size.x / viewport_size.x;
     }
 }
 
@@ -47,4 +50,13 @@ impl Segment {
     pub fn new(a: Pos2, b: Pos2) -> Self {
         Self { segment: [a, b] }
     }
+}
+
+pub fn build_viewport(canvas_size: egui::Vec2, zoom: f32) -> Rect {
+    // let canvas_size = egui::vec2(dimensions.0 as f32, dimensions.1 as f32);
+    let center = canvas_size / 2.0;
+
+    let view_size = canvas_size / zoom;
+
+    Rect::from_center_size(center.to_pos2(), view_size)
 }

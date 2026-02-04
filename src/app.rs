@@ -1,6 +1,6 @@
 use crate::draw::canvas;
 use crate::utils;
-use egui::{Response, Stroke};
+use egui::{Margin, Response, Stroke};
 
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
@@ -14,7 +14,7 @@ pub struct SimplePaintApp {
 impl Default for SimplePaintApp {
     fn default() -> Self {
         Self {
-            canvas: canvas::Canvas::new((1920, 1080)),
+            canvas: canvas::Canvas::new(egui::Vec2::new(1920.0, 1080.0)),
             stroke_type: egui::Stroke::new(2.0, egui::Color32::BLACK),
             tool: Tool::Pen,
         }
@@ -119,37 +119,68 @@ impl eframe::App for SimplePaintApp {
             .max_height(40.0)
             .show(ctx, |ui| {
                 ui.horizontal_centered(|ui| {
-                    ui.add_space(ui.available_width() / 2.4);
-                    ui.color_edit_button_srgba(&mut self.stroke_type.color);
-                    ui.selectable_value(
-                        &mut self.tool,
-                        Tool::Pen,
-                        egui::RichText::new("Pen")
-                            .size(14.0)
-                            .text_style(egui::TextStyle::Monospace),
-                    );
-                    ui.selectable_value(
-                        &mut self.tool,
-                        Tool::Erase,
-                        egui::RichText::new("Eraser")
-                            .size(14.0)
-                            .text_style(egui::TextStyle::Monospace),
-                    );
-                    ui.add(egui::Slider::new(&mut self.stroke_type.width, 0.5..=12.0));
+                    ui.add_space(20.0);
                     if ui.add(egui::Button::new("Undo")).clicked() {
                         self.canvas.strokes.pop();
                     }
+                    ui.add_space(ui.available_width() / 3.7);
+
+                    egui::Frame::NONE
+                        .inner_margin(Margin::symmetric(20, 0))
+                        .show(ui, |ui| {
+                            egui::Grid::new("some_unique_id")
+                                .min_col_width(50.0)
+                                .show(ui, |ui| {
+                                    ui.color_edit_button_srgba(&mut self.stroke_type.color);
+                                    ui.selectable_value(
+                                        &mut self.tool,
+                                        Tool::Pen,
+                                        egui::RichText::new("Pen")
+                                            .size(14.0)
+                                            .text_style(egui::TextStyle::Monospace),
+                                    );
+                                    ui.selectable_value(
+                                        &mut self.tool,
+                                        Tool::Erase,
+                                        egui::RichText::new("Eraser")
+                                            .size(14.0)
+                                            .text_style(egui::TextStyle::Monospace),
+                                    );
+                                })
+                        });
+
+                    egui::Frame::NONE.show(ui, |ui| {
+                        ui.label("Width");
+                        ui.add(egui::Slider::new(&mut self.stroke_type.width, 0.5..=12.0));
+                    });
+
+                    egui::Frame::NONE
+                        .inner_margin(Margin::symmetric(30, 0))
+                        .show(ui, |ui| {
+                            ui.label("Zoom");
+                            let zoom = egui::DragValue::new(&mut self.canvas.zoom)
+                                .range(0.01..=10.0)
+                                .speed(0.01)
+                                .custom_formatter(|n, _| {
+                                    let n = n * 100.0;
+                                    format!("{n:.0}%")
+                                });
+                            let zoom_response = ui.add(zoom);
+
+                            if zoom_response.dragged() {
+                                self.canvas.canvas_viewport = canvas::build_viewport(
+                                    self.canvas.canvas_area.size(),
+                                    self.canvas.zoom,
+                                );
+                            }
+                        });
                 })
-                // });
-                //
             });
 
         egui::CentralPanel::default()
-            .frame(
-                egui::Frame::new().fill(egui::Color32::DARK_GRAY), // .inner_margin(egui::Margin::symmetric(0, 15)),
-            )
+            .frame(egui::Frame::new().fill(egui::Color32::DARK_GRAY))
             .show(ctx, |ui| {
-                let scene = egui::Scene::new().zoom_range(0.1..=10.0);
+                let scene = egui::Scene::new().zoom_range(0.01..=10.0);
                 let scene_response = scene.show(ui, &mut self.canvas.canvas_viewport, |ui| {
                     ui.allocate_painter(self.canvas.canvas_area.size(), egui::Sense::drag())
                 });
@@ -166,6 +197,9 @@ impl eframe::App for SimplePaintApp {
                         Tool::Erase => self.erase(&response),
                     }
                 }
+
+                self.canvas.update_zoom();
+
                 for stroke in &self.canvas.strokes {
                     for segment in &stroke.points {
                         painter.line_segment(segment.segment, stroke.stroke);
