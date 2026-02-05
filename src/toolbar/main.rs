@@ -1,6 +1,6 @@
 use super::super::SimplePaintApp;
 use crate::draw::canvas;
-use egui::{InnerResponse, Margin, Response};
+use egui::{InnerResponse, Margin};
 
 #[derive(PartialEq, serde::Deserialize, serde::Serialize)]
 pub enum Tool {
@@ -16,9 +16,9 @@ pub fn toolbar(app: &mut SimplePaintApp, ui: &mut egui::Ui) -> InnerResponse<()>
             ui.add_space(30.0);
 
             // Undo
-            // if ui.add(egui::Button::new("Undo")).clicked() {
-            //     app.canvas.strokes.pop();
-            // }
+            if ui.add(egui::Button::new("Undo")).clicked() {
+                app.canvas.strokes.pop();
+            }
             ui.color_edit_button_srgba(&mut app.stroke_type.color);
 
             // TOOLS
@@ -27,7 +27,7 @@ pub fn toolbar(app: &mut SimplePaintApp, ui: &mut egui::Ui) -> InnerResponse<()>
             // Pen Width
             egui::Frame::NONE.show(ui, |ui| {
                 ui.label("Width");
-                ui.add(egui::Slider::new(&mut app.stroke_type.width, 0.5..=12.0));
+                ui.add(egui::Slider::new(&mut app.stroke_type.width, 0.5..=50.0));
             });
 
             // Zoom

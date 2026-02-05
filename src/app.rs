@@ -1,11 +1,12 @@
 use crate::draw::canvas;
 use crate::toolbar::main::{Tool, toolbar};
 use crate::utils;
-use egui::{Margin, Response, Stroke};
+use egui::{Id, Margin, Modal, Response, Stroke};
 
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
 pub struct SimplePaintApp {
+    initial_modal: InitialModal,
     pub canvas: canvas::Canvas,
     pub stroke_type: Stroke,
     pub tool: Tool,
@@ -15,10 +16,38 @@ pub struct SimplePaintApp {
 impl Default for SimplePaintApp {
     fn default() -> Self {
         Self {
+            initial_modal: InitialModal::default(),
             canvas: canvas::Canvas::new(egui::Vec2::new(1920.0, 1080.0)),
-            stroke_type: egui::Stroke::new(2.0, egui::Color32::BLACK),
+            stroke_type: egui::Stroke::new(8.0, egui::Color32::BLACK),
             tool: Tool::Pen,
         }
+    }
+}
+
+#[derive(serde::Deserialize, serde::Serialize)]
+struct InitialModal {
+    active: bool,
+    width: String,
+    height: String,
+}
+
+impl InitialModal {
+    fn default() -> Self {
+        Self {
+            active: true,
+            width: String::new(),
+            height: String::new(),
+        }
+    }
+
+    fn validate_dimensions(&self) -> (f32, f32) {
+        let parsed_width = self.width.parse::<f32>().expect("Failed to parse to width");
+        let parsed_height = self
+            .height
+            .parse::<f32>()
+            .expect("Failed to parse to height");
+
+        (parsed_width, parsed_height)
     }
 }
 
@@ -108,6 +137,33 @@ impl eframe::App for SimplePaintApp {
             });
         });
 
+        if self.initial_modal.active {
+            egui::Window::new("My Modal Window")
+                .max_width(100.0)
+                .title_bar(false)
+                // .open(&mut self.initial_modal.active) // Links the window's close button to the state
+                .collapsible(false)
+                .resizable(false)
+                .show(ctx, |ui| {
+                    ui.vertical_centered(|ui| {
+                        ui.label(
+                            egui::RichText::new("Dimensions").size(16.0), // Set the font size in points
+                        );
+                        ui.add_space(15.0);
+                        ui.label("Width");
+                        ui.text_edit_singleline(&mut self.initial_modal.width);
+                        ui.label("Height");
+                        ui.text_edit_singleline(&mut self.initial_modal.height);
+
+                        if ui.add(egui::Button::new("New")).clicked() {
+                            let (width, height) = self.initial_modal.validate_dimensions();
+                            self.canvas = canvas::Canvas::new(egui::Vec2::new(width, height));
+                            self.initial_modal.active = false;
+                        }
+                    });
+                });
+        }
+
         egui::TopBottomPanel::top("tool panel")
             .frame(egui::Frame::new().fill(egui::Color32::from_hex("#adadad").unwrap_or_default()))
             .resizable(false)
@@ -115,7 +171,8 @@ impl eframe::App for SimplePaintApp {
                 ui.set_max_height(30.0);
 
                 ui.horizontal_centered(|ui| {
-                    ui.add_space((ui.available_width() / 2.0) - 571.0 / 2.0);
+                    let toolbar_width = 620.0;
+                    ui.add_space((ui.available_width() / 2.0) - toolbar_width / 2.0);
                     toolbar(self, ui);
                 });
             });
@@ -123,6 +180,9 @@ impl eframe::App for SimplePaintApp {
         egui::CentralPanel::default()
             .frame(egui::Frame::new().fill(egui::Color32::DARK_GRAY))
             .show(ctx, |ui| {
+                if self.initial_modal.active {
+                    return;
+                }
                 let scene = egui::Scene::new().zoom_range(0.01..=10.0);
                 let scene_response = scene.show(ui, &mut self.canvas.canvas_viewport, |ui| {
                     ui.allocate_painter(self.canvas.canvas_area.size(), egui::Sense::drag())
@@ -137,7 +197,16 @@ impl eframe::App for SimplePaintApp {
                             ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::Crosshair);
                             self.draw(&response, &painter);
                         }
-                        Tool::Erase => self.erase(&response),
+                        Tool::Erase => {
+                            if let Some(pos) = response.hover_pos() {
+                                painter.circle_stroke(
+                                    pos,
+                                    self.stroke_type.width,
+                                    egui::Stroke::new(1.0, egui::Color32::BLACK),
+                                );
+                            }
+                            self.erase(&response);
+                        }
                     }
                 }
 
