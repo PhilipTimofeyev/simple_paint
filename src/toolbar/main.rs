@@ -2,7 +2,7 @@ use super::super::SimplePaintApp;
 use crate::draw::canvas;
 use egui::{InnerResponse, Margin};
 
-#[derive(PartialEq, serde::Deserialize, serde::Serialize)]
+#[derive(PartialEq, Eq, serde::Deserialize, serde::Serialize)]
 pub enum Tool {
     Pen,
     Erase,

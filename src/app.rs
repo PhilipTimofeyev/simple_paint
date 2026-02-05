@@ -1,7 +1,7 @@
 use crate::draw::canvas;
 use crate::toolbar::main::{Tool, toolbar};
 use crate::utils;
-use egui::{Id, Margin, Modal, Response, Stroke};
+use egui::{Response, Stroke};
 
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
@@ -158,6 +158,9 @@ impl eframe::App for SimplePaintApp {
                         if ui.add(egui::Button::new("New")).clicked() {
                             let (width, height) = self.initial_modal.validate_dimensions();
                             self.canvas = canvas::Canvas::new(egui::Vec2::new(width, height));
+                            self.initial_modal.active = false;
+                        }
+                        if ui.add(egui::Button::new("Default")).clicked() {
                             self.initial_modal.active = false;
                         }
                     });
