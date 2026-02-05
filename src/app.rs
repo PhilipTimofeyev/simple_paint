@@ -1,13 +1,13 @@
 use crate::draw::canvas;
+use crate::modals;
 use crate::toolbar::main::{Tool, toolbar};
 use crate::utils;
-use egui::epaint::text;
-use egui::{Margin, Response, Stroke};
+use egui::{Response, Stroke};
 
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
 pub struct SimplePaintApp {
-    initial_modal: InitialModal,
+    pub initial_modal: modals::InitialModal,
     pub canvas: canvas::Canvas,
     pub stroke_type: Stroke,
     pub tool: Tool,
@@ -17,38 +17,11 @@ pub struct SimplePaintApp {
 impl Default for SimplePaintApp {
     fn default() -> Self {
         Self {
-            initial_modal: InitialModal::default(),
+            initial_modal: modals::InitialModal::default(),
             canvas: canvas::Canvas::new(egui::Vec2::new(1920.0, 1080.0)),
             stroke_type: egui::Stroke::new(8.0, egui::Color32::BLACK),
             tool: Tool::Pen,
         }
-    }
-}
-
-#[derive(serde::Deserialize, serde::Serialize)]
-struct InitialModal {
-    active: bool,
-    width: String,
-    height: String,
-}
-
-impl InitialModal {
-    fn default() -> Self {
-        Self {
-            active: true,
-            width: String::new(),
-            height: String::new(),
-        }
-    }
-
-    fn validate_dimensions(&self) -> (f32, f32) {
-        let parsed_width = self.width.parse::<f32>().expect("Failed to parse to width");
-        let parsed_height = self
-            .height
-            .parse::<f32>()
-            .expect("Failed to parse to height");
-
-        (parsed_width, parsed_height)
     }
 }
 
@@ -119,7 +92,6 @@ impl eframe::App for SimplePaintApp {
         eframe::set_value(storage, eframe::APP_KEY, self);
     }
 
-    #[allow(clippy::too_many_lines)]
     /// Called each time the UI needs repainting, which may be many times per second.
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
@@ -140,73 +112,7 @@ impl eframe::App for SimplePaintApp {
         });
 
         if self.initial_modal.active {
-            egui::Window::new("Initialize Modal")
-                .max_width(150.0)
-                .title_bar(false)
-                .collapsible(false)
-                .resizable(false)
-                .frame(
-                    egui::Frame::new()
-                        .inner_margin(Margin::symmetric(40, 20))
-                        .fill(egui::Color32::from_hex("#ebeded").unwrap_or_default())
-                        .corner_radius(10.0),
-                )
-                .show(ctx, |ui| {
-                    ui.set_max_height(400.0);
-                    ui.vertical(|ui| {
-                        ui.vertical_centered(|ui| {
-                            ui.label(
-                                egui::RichText::new("Dimensions").size(16.0), // Set the font size in points
-                            );
-                        });
-                        ui.add_space(15.0);
-                        ui.horizontal(|ui| {
-                            ui.label("Width:");
-                            let width_text =
-                                egui::TextEdit::singleline(&mut self.initial_modal.width)
-                                    .desired_width(40.0);
-                            ui.with_layout(
-                                egui::Layout::right_to_left(egui::Align::Center),
-                                |ui| {
-                                    ui.add(width_text);
-                                },
-                            );
-                        });
-                        ui.horizontal(|ui| {
-                            ui.label("Height:");
-                            let height_text =
-                                egui::TextEdit::singleline(&mut self.initial_modal.height)
-                                    .desired_width(40.0);
-                            ui.with_layout(
-                                egui::Layout::right_to_left(egui::Align::Center),
-                                |ui| {
-                                    ui.add(height_text);
-                                },
-                            );
-                        });
-                        ui.add_space(10.0);
-                        ui.with_layout(
-                            egui::Layout::top_down_justified(egui::Align::Center),
-                            |ui| {
-                                if ui.add(egui::Button::new("New")).clicked() {
-                                    let (width, height) = self.initial_modal.validate_dimensions();
-                                    self.canvas =
-                                        canvas::Canvas::new(egui::Vec2::new(width, height));
-                                    self.initial_modal.active = false;
-                                }
-                            },
-                        );
-                        ui.separator();
-                        ui.with_layout(
-                            egui::Layout::top_down_justified(egui::Align::Center),
-                            |ui| {
-                                if ui.add(egui::Button::new("Default")).clicked() {
-                                    self.initial_modal.active = false;
-                                }
-                            },
-                        );
-                    });
-                });
+            modals::initial_modal(ctx, self);
         }
 
         egui::TopBottomPanel::top("tool panel")
