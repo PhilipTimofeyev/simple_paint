@@ -20,6 +20,11 @@ pub fn toolbar(app: &mut SimplePaintApp, ui: &mut egui::Ui) -> InnerResponse<()>
                 app.history.undo(&mut app.canvas);
             }
 
+            // Redo
+            if ui.add(egui::Button::new("Redo")).clicked() {
+                app.history.redo(&mut app.canvas);
+            }
+
             // Color Palette
             ui.color_edit_button_srgba(&mut app.stroke_type.color);
 

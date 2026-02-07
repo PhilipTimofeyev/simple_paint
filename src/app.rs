@@ -253,4 +253,10 @@ impl History {
             self.redo.push(action);
         }
     }
+
+    pub fn redo(&mut self, canvas: &mut canvas::Canvas) {
+        if let Some(action) = self.redo.pop() {
+            action.execute(canvas);
+        }
+    }
 }
