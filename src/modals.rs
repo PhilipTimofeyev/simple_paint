@@ -37,6 +37,7 @@ pub fn initial_modal(ctx: &egui::Context, app: &mut SimplePaintApp) {
         .title_bar(false)
         .collapsible(false)
         .resizable(false)
+        .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
         .frame(
             egui::Frame::new()
                 .inner_margin(Margin::symmetric(40, 20))
