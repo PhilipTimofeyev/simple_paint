@@ -17,8 +17,10 @@ pub fn toolbar(app: &mut SimplePaintApp, ui: &mut egui::Ui) -> InnerResponse<()>
 
             // Undo
             if ui.add(egui::Button::new("Undo")).clicked() {
-                app.canvas.strokes.pop();
+                app.history.undo(&mut app.canvas);
             }
+
+            // Color Palette
             ui.color_edit_button_srgba(&mut app.stroke_type.color);
 
             // TOOLS

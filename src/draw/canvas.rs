@@ -36,6 +36,64 @@ impl Canvas {
 }
 
 #[derive(Debug, serde::Deserialize, serde::Serialize)]
+pub enum Action {
+    AddStroke {
+        stroke: SingleStroke,
+    },
+    RemoveStroke {
+        stroke: SingleStroke,
+        index: usize,
+    },
+    ModifyStroke {
+        before: Option<SingleStroke>,
+        after: Option<SingleStroke>,
+        index: usize,
+    },
+}
+
+impl Action {
+    pub fn execute(&self, canvas: &mut Canvas) {
+        match self {
+            Self::AddStroke { stroke } => {
+                canvas.strokes.push(stroke.clone());
+            }
+            Self::RemoveStroke { stroke: _, index } => {
+                canvas.strokes.remove(*index);
+            }
+            Self::ModifyStroke {
+                before: _,
+                after,
+                index,
+            } => {
+                if let Some(after) = after {
+                    canvas.strokes[*index] = after.clone();
+                }
+            }
+        }
+    }
+
+    pub fn undo(&self, canvas: &mut Canvas) {
+        match self {
+            Self::AddStroke { stroke } => {
+                canvas.strokes.pop();
+            }
+            Self::RemoveStroke { stroke, index } => {
+                canvas.strokes.insert(*index, stroke.clone());
+            }
+            Self::ModifyStroke {
+                before,
+                after: _,
+                index,
+            } => {
+                if let Some(before) = before {
+                    canvas.strokes[*index] = before.clone();
+                }
+            }
+        }
+    }
+}
+
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
 pub struct SingleStroke {
     pub stroke: egui::Stroke,
     pub points: Vec<Segment>,

@@ -1,4 +1,4 @@
-use crate::draw::canvas;
+use crate::draw::canvas::{self, SingleStroke};
 use crate::modals;
 use crate::toolbar::main::{Tool, toolbar};
 use crate::utils;
@@ -11,6 +11,7 @@ pub struct SimplePaintApp {
     pub canvas: canvas::Canvas,
     pub stroke_type: Stroke,
     pub tool: Tool,
+    pub history: History,
     // #[serde(skip)] // This how you opt-out of serialization of a field
 }
 
@@ -21,6 +22,7 @@ impl Default for SimplePaintApp {
             canvas: canvas::Canvas::new(egui::Vec2::new(1920.0, 1080.0)),
             stroke_type: egui::Stroke::new(8.0, egui::Color32::BLACK),
             tool: Tool::Pen,
+            history: History::default(),
         }
     }
 }
@@ -38,7 +40,12 @@ impl SimplePaintApp {
         // } else {
 
         Default::default()
-        // }
+    }
+
+    fn run(&mut self, action: canvas::Action) {
+        action.execute(&mut self.canvas);
+        self.history.undo.push(action);
+        self.history.redo.clear();
     }
 
     fn draw(&mut self, response: &Response, painter: &egui::Painter) {
@@ -63,10 +70,11 @@ impl SimplePaintApp {
 
             if response.drag_stopped() {
                 if !self.canvas.segments.is_empty() {
-                    self.canvas.strokes.push(canvas::SingleStroke {
+                    let stroke = canvas::SingleStroke {
                         stroke: self.stroke_type,
                         points: std::mem::take(&mut self.canvas.segments),
-                    });
+                    };
+                    self.run(canvas::Action::AddStroke { stroke });
                 }
                 self.canvas.last_cursor_pos = None;
             }
@@ -74,14 +82,44 @@ impl SimplePaintApp {
     }
 
     fn erase(&mut self, response: &Response) {
+        let mut erase_actions: Vec<canvas::Action> = Vec::new();
+
         if response.dragged() {
             if let Some(eraser_pos) = response.interact_pointer_pos() {
-                for stroke in &mut self.canvas.strokes {
-                    stroke.points.retain(|seg| {
-                        utils::cursor_to_segment_distance(eraser_pos, *seg) > self.stroke_type.width
+                // let mut retained_segments: Vec<canvas::Segment> = Vec::new();
+                for (idx, stroke) in self.canvas.strokes.iter().enumerate() {
+                    if stroke.points.iter().all(|segment| {
+                        utils::cursor_to_segment_distance(eraser_pos, segment)
+                            > self.stroke_type.width
+                    }) {
+                        continue;
+                    }
+
+                    let retained_segments: Vec<canvas::Segment> = stroke
+                        .points
+                        .iter()
+                        .filter(|segment| {
+                            utils::cursor_to_segment_distance(eraser_pos, segment)
+                                >= self.stroke_type.width
+                        })
+                        .copied()
+                        .collect();
+
+                    let modified_stroke = SingleStroke {
+                        stroke: stroke.stroke,
+                        points: retained_segments.clone(),
+                    };
+
+                    erase_actions.push(canvas::Action::ModifyStroke {
+                        before: Some(stroke.clone()),
+                        after: Some(modified_stroke),
+                        index: idx,
                     });
                 }
             }
+        }
+        for action in erase_actions {
+            self.run(action);
         }
     }
 }
@@ -94,6 +132,10 @@ impl eframe::App for SimplePaintApp {
 
     /// Called each time the UI needs repainting, which may be many times per second.
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        if self.initial_modal.active {
+            modals::initial_modal(ctx, self);
+        }
+
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             egui::MenuBar::new().ui(ui, |ui| {
                 // NOTE: no File->Quit on web pages!
@@ -110,10 +152,6 @@ impl eframe::App for SimplePaintApp {
                 egui::widgets::global_theme_preference_buttons(ui);
             });
         });
-
-        if self.initial_modal.active {
-            modals::initial_modal(ctx, self);
-        }
 
         egui::TopBottomPanel::top("tool panel")
             .frame(egui::Frame::new().fill(egui::Color32::from_hex("#adadad").unwrap_or_default()))
@@ -195,4 +233,20 @@ fn powered_by_egui_and_eframe(ui: &mut egui::Ui) {
         );
         ui.label(".");
     });
+}
+
+#[derive(serde::Deserialize, serde::Serialize, Default)]
+pub struct History {
+    undo: Vec<canvas::Action>,
+    redo: Vec<canvas::Action>,
+}
+
+impl History {
+    pub fn undo(&mut self, canvas: &mut canvas::Canvas) {
+        if let Some(action) = self.undo.pop() {
+            println!("{:?}", action);
+            action.undo(canvas);
+            self.redo.push(action);
+        }
+    }
 }
