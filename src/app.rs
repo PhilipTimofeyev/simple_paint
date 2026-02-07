@@ -1,8 +1,13 @@
-use crate::draw::canvas::{self, SingleStroke};
+use std::fs::File;
+use std::io::{BufReader, BufWriter, Write};
+
+use crate::draw::canvas::{self, Canvas, SingleStroke};
 use crate::modals;
 use crate::toolbar::main::{Tool, toolbar};
 use crate::utils;
-use egui::{Response, Stroke};
+use eframe::Error;
+use egui::{Response, Stroke, widgets};
+use egui_file::FileDialog;
 
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
@@ -12,7 +17,10 @@ pub struct SimplePaintApp {
     pub stroke_type: Stroke,
     pub tool: Tool,
     pub history: History,
-    // #[serde(skip)] // This how you opt-out of serialization of a field
+    #[serde(skip_serializing, skip_deserializing)]
+    open_file_dialog: Option<FileDialog>,
+    #[serde(skip_serializing, skip_deserializing)]
+    save_file_dialog: Option<FileDialog>, // #[serde(skip)] // This how you opt-out of serialization of a field
 }
 
 impl Default for SimplePaintApp {
@@ -23,6 +31,8 @@ impl Default for SimplePaintApp {
             stroke_type: egui::Stroke::new(8.0, egui::Color32::BLACK),
             tool: Tool::Pen,
             history: History::default(),
+            open_file_dialog: None,
+            save_file_dialog: None,
         }
     }
 }
@@ -147,6 +157,27 @@ impl eframe::App for SimplePaintApp {
                 let is_web = cfg!(target_arch = "wasm32");
                 if !is_web {
                     ui.menu_button("File", |ui| {
+                        if ui.button("Save").clicked() {
+                            let mut dialog = FileDialog::save_file();
+                            dialog.open();
+                            self.save_file_dialog = Some(dialog);
+                            // let save_file = File::create("save_file.json").unwrap();
+                            // let mut writer = BufWriter::new(save_file);
+                            //
+                            // serde_json::to_writer_pretty(writer, &self.canvas).unwrap();
+                            // writer.flush();
+                        }
+                        if ui.button("Open").clicked() {
+                            let mut dialog = FileDialog::open_file();
+                            dialog.open();
+                            self.open_file_dialog = Some(dialog);
+                            // let file = File::open("save_file.json").unwrap();
+                            // let reader = BufReader::new(file);
+                            //
+                            // let canvas: Canvas = serde_json::from_reader(reader).unwrap();
+                            // self.canvas = canvas;
+                        }
+
                         if ui.button("Quit").clicked() {
                             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                         }
@@ -211,13 +242,37 @@ impl eframe::App for SimplePaintApp {
                         painter.line_segment(segment.segment, stroke.stroke);
                     }
                 }
+                if let Some(dialog) = &mut self.open_file_dialog {
+                    if dialog.show(ctx).selected() {
+                        if let Some(path) = dialog.path() {
+                            let file = File::open(path).unwrap();
+                            let reader = BufReader::new(file);
+
+                            let canvas: Canvas = serde_json::from_reader(reader).unwrap();
+                            self.canvas = canvas;
+                        }
+
+                        self.open_file_dialog = None;
+                    }
+                }
+
+                if let Some(dialog) = &mut self.save_file_dialog {
+                    if dialog.show(ctx).selected() {
+                        if let Some(path) = dialog.path() {
+                            let save_file = File::create(path.with_extension("json")).unwrap();
+                            let mut writer = BufWriter::new(save_file);
+                            serde_json::to_writer_pretty(writer, &self.canvas).unwrap();
+                        }
+
+                        self.open_file_dialog = None;
+                    }
+                };
                 // ui.separator();
                 //
                 // ui.add(egui::github_link_file!(
                 //     "https://github.com/emilk/eframe_template/blob/main/",
                 //     "Source code."
                 // ));
-
                 // ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                 //     powered_by_egui_and_eframe(ui);
                 //     egui::warn_if_debug_build(ui);

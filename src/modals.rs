@@ -1,3 +1,5 @@
+use std::num::ParseFloatError;
+
 use super::SimplePaintApp;
 use crate::draw::canvas::Canvas;
 use egui::Margin;
@@ -20,14 +22,11 @@ impl Default for InitialModal {
 }
 
 impl InitialModal {
-    fn validate_dimensions(&self) -> (f32, f32) {
-        let parsed_width = self.width.parse::<f32>().expect("Failed to parse to width");
-        let parsed_height = self
-            .height
-            .parse::<f32>()
-            .expect("Failed to parse to height");
+    fn validate_dimensions(&self) -> Result<(f32, f32), ParseFloatError> {
+        let parsed_width = self.width.parse::<f32>()?;
+        let parsed_height = self.height.parse::<f32>()?;
 
-        (parsed_width, parsed_height)
+        Ok((parsed_width, parsed_height))
     }
 }
 
@@ -74,7 +73,12 @@ pub fn initial_modal(ctx: &egui::Context, app: &mut SimplePaintApp) {
                     egui::Layout::top_down_justified(egui::Align::Center),
                     |ui| {
                         if ui.add(egui::Button::new("New")).clicked() {
-                            let (width, height) = app.initial_modal.validate_dimensions();
+                            let Ok(dimensions) = app.initial_modal.validate_dimensions() else {
+                                app.initial_modal.width = String::new();
+                                app.initial_modal.height = String::new();
+                                return;
+                            };
+                            let (width, height) = dimensions;
                             app.canvas = Canvas::new(egui::Vec2::new(width, height));
                             app.initial_modal.active = false;
                         }

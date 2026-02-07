@@ -1,6 +1,6 @@
 use egui::{Pos2, Rect};
 
-#[derive(serde::Deserialize, serde::Serialize)]
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
 pub struct Canvas {
     pub canvas_viewport: Rect,
     pub canvas_area: Rect,
