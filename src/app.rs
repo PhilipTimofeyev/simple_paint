@@ -88,22 +88,27 @@ impl SimplePaintApp {
             if let Some(eraser_pos) = response.interact_pointer_pos() {
                 // let mut retained_segments: Vec<canvas::Segment> = Vec::new();
                 for (idx, stroke) in self.canvas.strokes.iter().enumerate() {
-                    if stroke.points.iter().all(|segment| {
-                        utils::cursor_to_segment_distance(eraser_pos, segment)
-                            > self.stroke_type.width
-                    }) {
-                        continue;
-                    }
+                    let mut erased = false;
 
                     let retained_segments: Vec<canvas::Segment> = stroke
                         .points
                         .iter()
-                        .filter(|segment| {
-                            utils::cursor_to_segment_distance(eraser_pos, segment)
-                                >= self.stroke_type.width
+                        .filter_map(|segment| {
+                            let segment_eraser_distance =
+                                utils::cursor_to_segment_distance(eraser_pos, segment);
+
+                            if segment_eraser_distance <= self.stroke_type.width {
+                                erased = true;
+                                None
+                            } else {
+                                Some(*segment)
+                            }
                         })
-                        .copied()
                         .collect();
+
+                    if !erased {
+                        continue;
+                    }
 
                     let modified_stroke = SingleStroke {
                         stroke: stroke.stroke,
@@ -244,7 +249,6 @@ pub struct History {
 impl History {
     pub fn undo(&mut self, canvas: &mut canvas::Canvas) {
         if let Some(action) = self.undo.pop() {
-            println!("{:?}", action);
             action.undo(canvas);
             self.redo.push(action);
         }
