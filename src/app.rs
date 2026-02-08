@@ -1,13 +1,11 @@
-use std::fs::File;
-use std::io::{BufReader, BufWriter, Write};
-
 use crate::draw::canvas::{self, Canvas, SingleStroke};
 use crate::modals;
 use crate::toolbar::main::{Tool, toolbar};
 use crate::utils;
-use eframe::Error;
-use egui::{Response, Stroke, widgets};
+use egui::{Response, Stroke};
 use egui_file::FileDialog;
+use std::fs::File;
+use std::io::{BufReader, BufWriter};
 
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
@@ -18,9 +16,7 @@ pub struct SimplePaintApp {
     pub tool: Tool,
     pub history: History,
     #[serde(skip_serializing, skip_deserializing)]
-    open_file_dialog: Option<FileDialog>,
-    #[serde(skip_serializing, skip_deserializing)]
-    save_file_dialog: Option<FileDialog>, // #[serde(skip)] // This how you opt-out of serialization of a field
+    file_dialog: Option<(FileDialog, Dialog)>,
 }
 
 impl Default for SimplePaintApp {
@@ -31,8 +27,7 @@ impl Default for SimplePaintApp {
             stroke_type: egui::Stroke::new(8.0, egui::Color32::BLACK),
             tool: Tool::Pen,
             history: History::default(),
-            open_file_dialog: None,
-            save_file_dialog: None,
+            file_dialog: None,
         }
     }
 }
@@ -145,7 +140,6 @@ impl eframe::App for SimplePaintApp {
         eframe::set_value(storage, eframe::APP_KEY, self);
     }
 
-    /// Called each time the UI needs repainting, which may be many times per second.
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         if self.initial_modal.active {
             modals::initial_modal(ctx, self);
@@ -160,22 +154,12 @@ impl eframe::App for SimplePaintApp {
                         if ui.button("Save").clicked() {
                             let mut dialog = FileDialog::save_file();
                             dialog.open();
-                            self.save_file_dialog = Some(dialog);
-                            // let save_file = File::create("save_file.json").unwrap();
-                            // let mut writer = BufWriter::new(save_file);
-                            //
-                            // serde_json::to_writer_pretty(writer, &self.canvas).unwrap();
-                            // writer.flush();
+                            self.file_dialog = Some((dialog, Dialog::Save));
                         }
                         if ui.button("Open").clicked() {
                             let mut dialog = FileDialog::open_file();
                             dialog.open();
-                            self.open_file_dialog = Some(dialog);
-                            // let file = File::open("save_file.json").unwrap();
-                            // let reader = BufReader::new(file);
-                            //
-                            // let canvas: Canvas = serde_json::from_reader(reader).unwrap();
-                            // self.canvas = canvas;
+                            self.file_dialog = Some((dialog, Dialog::Open));
                         }
 
                         if ui.button("Quit").clicked() {
@@ -184,6 +168,7 @@ impl eframe::App for SimplePaintApp {
                     });
                     ui.add_space(16.0);
                 }
+                self.run_dialog(ctx);
 
                 egui::widgets::global_theme_preference_buttons(ui);
             });
@@ -242,31 +227,7 @@ impl eframe::App for SimplePaintApp {
                         painter.line_segment(segment.segment, stroke.stroke);
                     }
                 }
-                if let Some(dialog) = &mut self.open_file_dialog {
-                    if dialog.show(ctx).selected() {
-                        if let Some(path) = dialog.path() {
-                            let file = File::open(path).unwrap();
-                            let reader = BufReader::new(file);
 
-                            let canvas: Canvas = serde_json::from_reader(reader).unwrap();
-                            self.canvas = canvas;
-                        }
-
-                        self.open_file_dialog = None;
-                    }
-                }
-
-                if let Some(dialog) = &mut self.save_file_dialog {
-                    if dialog.show(ctx).selected() {
-                        if let Some(path) = dialog.path() {
-                            let save_file = File::create(path.with_extension("json")).unwrap();
-                            let mut writer = BufWriter::new(save_file);
-                            serde_json::to_writer_pretty(writer, &self.canvas).unwrap();
-                        }
-
-                        self.open_file_dialog = None;
-                    }
-                };
                 // ui.separator();
                 //
                 // ui.add(egui::github_link_file!(
@@ -312,6 +273,37 @@ impl History {
     pub fn redo(&mut self, canvas: &mut canvas::Canvas) {
         if let Some(action) = self.redo.pop() {
             action.execute(canvas);
+        }
+    }
+}
+
+enum Dialog {
+    Open,
+    Save,
+}
+
+impl SimplePaintApp {
+    fn run_dialog(&mut self, ctx: &egui::Context) {
+        if let Some((dialog, action)) = &mut self.file_dialog {
+            if dialog.show(ctx).selected() {
+                if let Some(path) = dialog.path() {
+                    match action {
+                        Dialog::Open => {
+                            let file = File::open(path).unwrap();
+                            let reader = BufReader::new(file);
+                            let canvas: Canvas = serde_json::from_reader(reader).unwrap();
+                            self.canvas = canvas;
+                        }
+                        Dialog::Save => {
+                            let save_file = File::create(path.with_extension("json")).unwrap();
+                            let mut writer = BufWriter::new(save_file);
+                            serde_json::to_writer_pretty(writer, &self.canvas).unwrap();
+                        }
+                    }
+                }
+
+                self.file_dialog = None;
+            }
         }
     }
 }
